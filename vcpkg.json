@@ -5,6 +5,7 @@
     "fmt",
     "mdspan",
     "gtest",
-    "benchmark"
+    "benchmark",
+    "sfml"
   ]
 }
