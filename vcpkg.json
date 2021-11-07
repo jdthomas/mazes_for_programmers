@@ -6,6 +6,7 @@
     "mdspan",
     "gtest",
     "benchmark",
+    "range-v3",
     "sfml"
   ]
 }

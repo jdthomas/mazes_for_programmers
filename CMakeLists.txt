@@ -22,6 +22,7 @@ project(
 
 find_package(fmt REQUIRED)
 find_package(mdspan REQUIRED)
+find_package(range-v3 REQUIRED)
 find_package(SFML REQUIRED system window graphics)
 
 add_executable(${PROJECT_NAME} src/maze.cpp)
