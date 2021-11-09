@@ -42,8 +42,16 @@ struct Grid {
         ranges::views::iota(0, (int)width_));
   }
 
+  auto random_cell() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> d_w(0, width_ - 1);
+    std::uniform_int_distribution<> d_h(0, height_ - 1);
+    return std::make_pair(d_h(gen), d_w(gen));
+  }
+
   std::array<std::optional<std::pair<size_t, size_t>>, 4>
-  get_connected_neighbors(size_t row, size_t col) const {
+  get_connected_neighbors_(size_t row, size_t col) const {
     auto m = as_mdspan();
     return {
         (row > 0 && m(row - 1, col).down == Wall::Open)
@@ -61,8 +69,16 @@ struct Grid {
     };
   }
 
+  std::vector<std::pair<size_t, size_t>>
+  get_connected_neighbors(size_t row, size_t col) const {
+    auto n = get_connected_neighbors_(row, col);
+    return n | ranges::views::filter([](auto o) { return bool(o); }) |
+           ranges::views::transform([](auto o) { return *o; }) |
+           ranges::to<std::vector>;
+  }
+
   std::array<std::optional<std::pair<size_t, size_t>>, 4>
-  get_all_neighbors(size_t row, size_t col) const {
+  get_all_neighbors_(size_t row, size_t col) const {
     auto m = as_mdspan();
     return {
         (row > 0) ? std::make_optional(std::make_pair(row - 1, col))
@@ -76,6 +92,14 @@ struct Grid {
             ? std::make_optional(std::make_pair(row, col + 1))
             : std::nullopt,
     };
+  }
+
+  std::vector<std::pair<size_t, size_t>> get_all_neighbors(size_t row,
+                                                           size_t col) const {
+    auto n = get_all_neighbors_(row, col);
+    return n | ranges::views::filter([](auto o) { return bool(o); }) |
+           ranges::views::transform([](auto o) { return *o; }) |
+           ranges::to<std::vector>;
   }
 
   void link(ssize_t row_1, ssize_t col_1, ssize_t row_2, ssize_t col_2) {
@@ -103,11 +127,18 @@ struct Grid {
     }
   }
 
-  bool is_closed_cell(size_t row, size_t col) {
-    auto m = as_mdspan();
-    return m(row, col).down != Wall::Open && m(row, col).right != Wall::Open &&
-           (row > 0 && m(row - 1, col).right != Wall::Open) &&
-           (col > 0 && m(row, col - 1).down != Wall::Open);
+  bool is_closed_cell(size_t row, size_t col) const {
+    auto tmp = get_connected_neighbors_(row, col);
+    return ranges::accumulate(
+               tmp | ranges::views::transform([](auto o) { return o ? 1 : 0; }),
+               0) == 0;
+  }
+
+  bool is_dead_end_cell(size_t row, size_t col) const {
+    auto tmp = get_connected_neighbors_(row, col);
+    return ranges::accumulate(
+               tmp | ranges::views::transform([](auto o) { return o ? 1 : 0; }),
+               0) == 1;
   }
 
   void reset() {
@@ -135,6 +166,7 @@ Grid::Grid(size_t width, size_t height)
 namespace jt::maze {
 
 void binary_tree_maze(Grid &grid) {
+  fmt::print("Generating maze by binary tree\n");
   std::random_device rd;
   std::mt19937 gen(rd());
   std::bernoulli_distribution d(0.5);
@@ -155,6 +187,7 @@ void binary_tree_maze(Grid &grid) {
 }
 
 void sidewinder_maze(Grid &grid) {
+  fmt::print("Generating maze by sidewinder\n");
   std::random_device rd;
   std::mt19937 gen(rd());
   std::bernoulli_distribution d(0.5);
@@ -178,48 +211,39 @@ void sidewinder_maze(Grid &grid) {
   }
 }
 
-void random_walk_Aldous_Broder(Grid &grid) {
+void random_walk_Aldous_Broder_maze(Grid &grid) {
+  fmt::print("Generating maze by Aldous/Broder's\n");
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<> d_w(0, grid.width_);
-  std::uniform_int_distribution<> d_h(0, grid.height_);
+  std::uniform_int_distribution<> d_w(0, grid.width_ - 1);
+  std::uniform_int_distribution<> d_h(0, grid.height_ - 1);
 
   // Select random starting cell
   int row = d_h(gen), col = d_w(gen);
   int unvisited = grid.width_ * grid.height_ - 1;
   while (unvisited > 0) {
     fmt::print("visiting: {}, {}.{}\n", unvisited, row, col);
-    auto neighborhood = grid.get_all_neighbors(row, col);
-    auto neighbors = neighborhood |
-                     // Filter out of bounds neighbors
-                     ranges::views::filter([](auto o) { return bool(o); }) |
-                     ranges::to<std::vector>;
+    auto neighbors = grid.get_all_neighbors(row, col);
     for (auto &n : neighbors) {
-      fmt::print("  n: {} {}\n", n->first, n->second);
+      fmt::print("  n: {} {}\n", n.first, n.second);
     }
     std::uniform_int_distribution<> d_n(0, neighbors.size() - 1);
     auto x = d_n(gen);
     // fmt::print("Selected {} from 0-{}\n", x, neighbors.size());
     auto neighbor = neighbors[x];
 
-    auto tmp = grid.get_connected_neighbors(neighbor->first, neighbor->second);
-    auto is_closed_cell =
-        ranges::accumulate(
-            tmp | ranges::views::transform([](auto o) { return o ? 1 : 0; }),
-            0) == 0;
-    // fmt::print("is new neighbor {}.{} closed? {}\n", neighbor->first,
-    // neighbor->second, is_closed_cell);
-    if (is_closed_cell) {
-      grid.link(row, col, neighbor->first, neighbor->second);
+    if (grid.is_closed_cell(neighbor.first, neighbor.second)) {
+      grid.link(row, col, neighbor.first, neighbor.second);
       unvisited--;
     } else {
-      row = neighbor->first;
-      col = neighbor->second;
+      row = neighbor.first;
+      col = neighbor.second;
     }
   }
 }
 
-void random_walk_Wilson(Grid &grid) {
+void random_walk_Wilson_maze(Grid &grid) {
+  fmt::print("Generating maze by Wilson's\n");
   throw std::runtime_error("TBD");
   // std::random_device rd;
   // std::mt19937 gen(rd());
@@ -229,11 +253,84 @@ void random_walk_Wilson(Grid &grid) {
   // const std::tuple<int,int> first{d_w(gen), d_h(gen)};
 
   // auto ps = grid.positions();
-  // auto unvisited = ps | ranges::views::filter([first](const auto p) { return p != first; }) | ranges::to<std::vector>;
-  // ranges::shuffle(unvisited);
+  // auto unvisited = ps | ranges::views::filter([first](const auto p) { return
+  // p != first; }) | ranges::to<std::vector>; ranges::shuffle(unvisited);
 
   // while(unvisited.size()) {
   // }
+}
+
+void hunt_and_kill_maze(Grid &grid) {
+  fmt::print("Generating maze by hunting and killing \n");
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::optional<std::pair<ssize_t, ssize_t>> current = grid.random_cell();
+
+  while (current) {
+    auto &[row, col] = *current;
+    auto neighborhood = grid.get_all_neighbors(row, col);
+    auto neighbors = neighborhood | ranges::views::filter([grid](auto n) {
+                       return grid.is_closed_cell(n.first, n.second);
+                     }) |
+                     ranges::to<std::vector>;
+
+    // fmt::print("current: {}.{}, neighbors: {}\n", row, col, neighbors);
+
+    if (!neighbors.empty()) {
+      std::uniform_int_distribution<> d(0, neighbors.size() - 1);
+      auto n = neighbors[d(gen)];
+      grid.link(row, col, n.first, n.second);
+      current = n;
+    } else {
+      current = std::nullopt;
+
+      // fmt::print("hunting...\n");
+      for (auto pos : grid.positions()) {
+        // if pos is not closed cell and has at least one closed cell neighbor,
+        // set current to pos and break
+        auto [i, j] = pos;
+        auto n = grid.get_all_neighbors(i, j);
+        auto unvisited_neighbors_of_pos = ranges::accumulate(
+            n | ranges::views::transform([grid](auto np) {
+              return grid.is_closed_cell(np.first, np.second) ? 1 : 0;
+            }),
+            0);
+        if (!grid.is_closed_cell(i, j) && unvisited_neighbors_of_pos > 0) {
+          current = {i, j};
+          break;
+        }
+      }
+    }
+  }
+}
+
+void recursive_backtracking_maze(Grid &grid) {
+  fmt::print("Generating maze by backtracking\n");
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
+  std::vector<std::pair<ssize_t, ssize_t>> stack;
+  stack.push_back(grid.random_cell());
+
+  while (!stack.empty()) {
+    auto current = stack.back();
+    auto &[row, col] = current;
+
+    auto neighborhood = grid.get_all_neighbors(row, col);
+    auto neighbors = neighborhood | ranges::views::filter([grid](auto n) {
+                       return grid.is_closed_cell(n.first, n.second);
+                     }) |
+                     ranges::to<std::vector>;
+    if (neighbors.empty()) {
+      stack.pop_back();
+    } else {
+      std::uniform_int_distribution<> d(0, neighbors.size() - 1);
+      auto n = neighbors[d(gen)];
+      grid.link(row, col, n.first, n.second);
+      stack.push_back(n);
+    }
+  }
 }
 
 auto dijkstra_distances(const Grid &grid, size_t start_x = 0,
@@ -255,10 +352,9 @@ auto dijkstra_distances(const Grid &grid, size_t start_x = 0,
     }
     m(x, y) = depth;
     auto neighbors = grid.get_connected_neighbors(x, y);
-    ranges::transform(neighbors |
-                          ranges::views::filter([](auto o) { return bool(o); }),
-                      ranges::back_inserter(q), [d = depth + 1](auto n) {
-                        return std::make_tuple(n->first, n->second, d);
+    ranges::transform(neighbors, ranges::back_inserter(q),
+                      [d = depth + 1](auto n) {
+                        return std::make_tuple(n.first, n.second, d);
                       });
   }
   return distances;
@@ -401,9 +497,13 @@ auto gen_maze(jt::maze::Grid &grid) {
   } else if (method == 'S') {
     sidewinder_maze(grid);
   } else if (method == 'R') {
-    random_walk_Aldous_Broder(grid);
+    random_walk_Aldous_Broder_maze(grid);
   } else if (method == 'W') {
-    random_walk_Wilson(grid);
+    random_walk_Wilson_maze(grid);
+  } else if (method == 'K') {
+    hunt_and_kill_maze(grid);
+  } else if (method == 'C') {
+    recursive_backtracking_maze(grid);
   }
   fmt::print("{}\n", grid);
   auto distances = dijkstra_distances(grid, grid.width_ / 2, grid.height_ / 2);
