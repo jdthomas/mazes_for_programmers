@@ -36,7 +36,7 @@ struct Grid {
     return m(i, j);
   }
 
-  auto positions() {
+  auto positions() const {
     return ranges::views::cartesian_product(
         ranges::views::iota(0, (int)height_),
         ranges::views::iota(0, (int)width_));
@@ -412,6 +412,34 @@ auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
   return fmt::format_to(ctx.out(), "... {} x {}\n", grid.width_, grid.height_);
 }
 
+void draw_path(const jt::maze::Grid &grid, sf::RenderWindow &window,
+               std::vector<std::pair<int, int>> &path) {
+  const float cell_width = 800.0 / (grid.width_ + 2);
+  const float cell_height = 600.0 / (grid.height_ + 2);
+  const auto line_color = sf::Color::Red;
+
+  const auto center_of_cell = [cell_width, cell_height](auto row, auto col) {
+    return std::make_pair((1.5 + row) * cell_width, (1.5 + col) * cell_height);
+  };
+
+  if (path.empty())
+    return;
+
+  auto x = ranges::adjacent_find(
+      path,
+      [&window](auto a, auto b) {
+        sf::Vertex l[] = {a, b};
+        window.draw(l, 2, sf::Lines);
+        return false;
+      },
+      [center_of_cell, line_color](auto pos) {
+        auto &[x, y] = pos;
+        auto draw_pos = center_of_cell(x, y);
+        return sf::Vertex(sf::Vector2f(draw_pos.first, draw_pos.second),
+                          line_color);
+      });
+}
+
 void draw_maze(
     const jt::maze::Grid &grid, sf::RenderWindow &window,
     std::function<sf::Color(const jt::maze::Grid &, int, int)> colorizer) {
@@ -487,6 +515,13 @@ void draw_maze(
       }
     }
   }
+
+  // auto p = grid.positions() | ranges::views::transform([](auto p) {
+  //            auto [i, j] = p;
+  //            return std::make_pair(i, j);
+  //          }) |
+  //          ranges::to<std::vector>;
+  // draw_path(grid, window, p);
 }
 
 static char method = 'B';
