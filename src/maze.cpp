@@ -5,6 +5,7 @@
 #include <experimental/mdspan>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
+#include <iostream>
 #include <random>
 #include <range/v3/all.hpp>
 #include <vector>
@@ -231,7 +232,7 @@ void random_walk_Aldous_Broder_maze(Grid &grid) {
     fmt::print("visiting: {}, {}.{}\n", unvisited, row, col);
     auto neighbors = grid.get_all_neighbors(row, col);
     for (auto &n : neighbors) {
-      fmt::print("  n: {} {}\n", n.row, n.col);
+      fmt::print("  n: {}\n", n);
     }
     std::uniform_int_distribution<> d_n(0, neighbors.size() - 1);
     auto x = d_n(gen);
@@ -344,6 +345,8 @@ auto dijkstra_distances(const Grid &grid, size_t start_x = 0,
   std::deque<std::tuple<size_t, size_t, int>> q; // TODO: <CellCoordinate, int>
   q.push_back({start_y, start_x, 1});
 
+  fmt::print("Computing distances using dijkstra from {}x{} \n", start_x,
+             start_y);
   std::vector<int> distances(grid.width_ * grid.height_);
   auto m = stdex::mdspan<
       int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
@@ -365,6 +368,66 @@ auto dijkstra_distances(const Grid &grid, size_t start_x = 0,
   }
   return distances;
 }
+
+std::tuple<CellCoordinate, int> furthest_cell(const Grid &grid,
+                                              std::vector<int> &distances) {
+  auto d = stdex::mdspan<
+      int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
+      distances.data(), grid.height_, grid.width_);
+  auto p = grid.positions();
+  auto m = ranges::max_element(
+      p, [](const auto &a, const auto &b) { return a < b; },
+      [&](const auto &idx) {
+        auto &[row, col] = idx;
+        assert(row < grid.height_ && col < grid.width_);
+        return d(row, col);
+      });
+  auto [row, col] = *m;
+  return {CellCoordinate{row, col}, d(row, col)};
+}
+
+std::vector<CellCoordinate> longest_path_(Grid &grid,
+                                          std::vector<int> &distances) {
+  auto [c, d1] = furthest_cell(grid, distances);
+  fmt::print("longest path from: {}x{} to {} and spans {} steps \n",
+             grid.height_ / 2, grid.width_ / 2, c, d1);
+
+  auto new_distances = dijkstra_distances(grid, c.row, c.col);
+  auto [goal, longest_path_dist] = furthest_cell(grid, new_distances);
+
+  fmt::print("longest path from: {} to {} and spans {} steps \n", c, goal,
+             longest_path_dist);
+
+  // walk path
+
+  auto d = stdex::mdspan<
+      int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
+      new_distances.data(), grid.height_, grid.width_);
+
+  std::vector<CellCoordinate> path;
+  path.reserve(longest_path_dist);
+
+  auto step = goal;
+  while (d(step.row, step.col) > 1) {
+    path.push_back(step);
+    auto neighbors = grid.get_connected_neighbors(step.row, step.col);
+    fmt::print(" traversing path({}) on our way from {} at {} (d:{}), going to "
+               "one of {}, {}\n",
+               path.size(), goal, step, d(step.row, step.col), neighbors,
+               neighbors | ranges::views::transform(
+                               [d](auto n) { return d(n.row, n.col); }));
+    step = *ranges::min_element(neighbors, ranges::less{},
+                                [d](auto c) { return d(c.row, c.col); });
+    fmt::print("Next: {} (d:{})\n", step, d(step.row, step.col));
+  }
+  path.push_back(step);
+
+  fmt::print("  found path: {}", path);
+  std::cout.flush();
+
+  distances = new_distances;
+  return path;
+}
 }; // namespace jt::maze
 
 static char h_wall_to_char(const jt::maze::Wall wall) {
@@ -376,6 +439,25 @@ static char v_wall_to_char(const jt::maze::Wall wall) {
   return wall == jt::maze::Wall::Open    ? ' '
          : wall == jt::maze::Wall::Solid ? '|'
                                          : 'X';
+}
+
+template <> struct fmt::formatter<jt::maze::CellCoordinate> {
+  template <typename ParseContext> constexpr auto parse(ParseContext &ctx);
+
+  template <typename FormatContext>
+  auto format(jt::maze::CellCoordinate const &coord, FormatContext &ctx);
+};
+
+template <typename ParseContext>
+constexpr auto
+fmt::formatter<jt::maze::CellCoordinate>::parse(ParseContext &ctx) {
+  return ctx.begin();
+}
+
+template <typename FormatContext>
+auto fmt::formatter<jt::maze::CellCoordinate>::format(
+    jt::maze::CellCoordinate const &coord, FormatContext &ctx) {
+  return fmt::format_to(ctx.out(), "{}x{}", coord.row, coord.col);
 }
 
 template <> struct fmt::formatter<jt::maze::Grid> {
@@ -425,7 +507,9 @@ void draw_path(const jt::maze::Grid &grid, sf::RenderWindow &window,
   const auto line_color = sf::Color::Red;
 
   const auto center_of_cell = [cell_width, cell_height](auto row, auto col) {
-    return std::pair{(1.5 + row) * cell_width, (1.5 + col) * cell_height};
+    // Col/row correctly swapped here, i guess i have always been drwing these
+    // sideways :P
+    return std::pair{(1.5 + col) * cell_width, (1.5 + row) * cell_height};
   };
 
   if (path.empty())
@@ -438,9 +522,10 @@ void draw_path(const jt::maze::Grid &grid, sf::RenderWindow &window,
         window.draw(l, 2, sf::Lines);
         return false;
       },
-      [center_of_cell, line_color](auto pos) {
-        auto &[x, y] = pos;
-        auto draw_pos = center_of_cell(x, y);
+      [center_of_cell, line_color, &grid](auto pos) {
+        auto &[row, col] = pos;
+        assert(row < grid.height_ && col < grid.width_);
+        auto draw_pos = center_of_cell(row, col);
         return sf::Vertex(sf::Vector2f(draw_pos.first, draw_pos.second),
                           line_color);
       });
@@ -448,7 +533,8 @@ void draw_path(const jt::maze::Grid &grid, sf::RenderWindow &window,
 
 void draw_maze(
     const jt::maze::Grid &grid, sf::RenderWindow &window,
-    std::function<sf::Color(const jt::maze::Grid &, int, int)> colorizer) {
+    std::function<sf::Color(const jt::maze::Grid &, int, int)> colorizer,
+    std::vector<jt::maze::CellCoordinate> &path) {
   auto window_size = window.getSize();
   const float cell_width = 800.0 / (grid.width_ + 2);
   const float cell_height = 600.0 / (grid.height_ + 2);
@@ -527,7 +613,7 @@ void draw_maze(
   //            return std::make_pair(i, j);
   //          }) |
   //          ranges::to<std::vector>;
-  // draw_path(grid, window, p);
+  draw_path(grid, window, path);
 }
 
 static char method = 'B';
@@ -549,14 +635,12 @@ auto gen_maze(jt::maze::Grid &grid) {
   fmt::print("{}\n", grid);
   auto distances = dijkstra_distances(grid, grid.width_ / 2, grid.height_ / 2);
   fmt::print("D:{}\n", distances);
+
   return distances;
 }
 
-std::vector<jt::maze::CellCoordinate> longest_path_(jt::maze::Grid &grid) {
-  return {};
-}
-
-void gui_main(jt::maze::Grid grid, std::vector<int> distances) {
+void gui_main(jt::maze::Grid grid, std::vector<int> distances,
+              std::vector<jt::maze::CellCoordinate> path) {
 
   auto d = stdex::mdspan<
       int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
@@ -587,6 +671,8 @@ void gui_main(jt::maze::Grid grid, std::vector<int> distances) {
           fmt::print("Regenerating maze!\n");
           grid.reset();
           distances = gen_maze(grid);
+
+          path = longest_path_(grid, distances);
           d = stdex::mdspan<int, stdex::extents<stdex::dynamic_extent,
                                                 stdex::dynamic_extent>>(
               distances.data(), grid.height_, grid.width_);
@@ -602,7 +688,7 @@ void gui_main(jt::maze::Grid grid, std::vector<int> distances) {
     window.clear(sf::Color::Black);
 
     // draw everything here...
-    draw_maze(grid, window, colorizer);
+    draw_maze(grid, window, colorizer, path);
 
     // end the current frame
     window.display();
@@ -619,6 +705,8 @@ int main(int argc, char **argv) {
 
   auto distances = gen_maze(grid);
 
-  gui_main(grid, distances);
+  auto path = longest_path_(grid, distances);
+
+  gui_main(grid, distances, path);
   return 0;
 }
