@@ -8,6 +8,7 @@
 #include <iostream>
 #include <random>
 #include <range/v3/all.hpp>
+#include <set>
 #include <vector>
 
 #include <SFML/Graphics.hpp>
@@ -25,6 +26,14 @@ struct Cell {
 struct CellCoordinate {
   size_t row, col;
 };
+
+bool operator<(const CellCoordinate &a, const CellCoordinate &b) {
+  return a.row < b.row || (a.row == b.row && a.col < b.col);
+}
+
+bool operator==(const CellCoordinate &a, const CellCoordinate &b) {
+  return a.row == b.row && a.col == b.col;
+}
 
 struct Grid {
   Grid(size_t width, size_t height);
@@ -60,7 +69,7 @@ struct Grid {
   }
 
   auto random_cell() {
-    //TODO: Move random stuffs to class
+    // TODO: Move random stuffs to class
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> d_w(0, width_ - 1);
@@ -261,20 +270,65 @@ void random_walk_Aldous_Broder_maze(Grid &grid) {
 
 void random_walk_Wilson_maze(Grid &grid) {
   fmt::print("Generating maze by Wilson's\n");
-  throw std::runtime_error("TBD");
-  // std::random_device rd;
-  // std::mt19937 gen(rd());
-  // std::uniform_int_distribution<> d_w(0, grid.width_);
-  // std::uniform_int_distribution<> d_h(0, grid.height_);
+  std::random_device rd;
+  std::mt19937 gen(rd());
 
-  // const std::tuple<int,int> first{d_w(gen), d_h(gen)};
+  auto unvisited = grid.positions() | ranges::to<std::set>;
 
-  // auto ps = grid.positions();
-  // auto unvisited = ps | ranges::views::filter([first](const auto p) { return
-  // p != first; }) | ranges::to<std::vector>; ranges::shuffle(unvisited);
+  // Random from set :/
+  {
+    std::uniform_int_distribution<> d(0, unvisited.size() - 1);
+    auto first = std::begin(unvisited);
+    for (size_t i = d(gen); i > 0; i--) {
+      first = std::next(first);
+    }
+    unvisited.erase(first);
+  }
 
-  // while(unvisited.size()) {
-  // }
+  while (unvisited.size() > 0) {
+    fmt::print("unvisited: {}\n", unvisited.size());
+    // Random from set :/
+    auto cell_i = std::begin(unvisited);
+    {
+      std::uniform_int_distribution<> d(0, unvisited.size() - 1);
+      for (size_t i = d(gen); i > 0; i--) {
+        cell_i = std::next(cell_i);
+      }
+    }
+    auto cell = *cell_i;
+    // fmt::print("cell: {} dis={}\n", cell,
+    // std::distance(std::begin(unvisited), cell_i));
+    assert(unvisited.find(cell) != ranges::end(unvisited));
+    std::vector<CellCoordinate> path{cell};
+
+    while (unvisited.find(cell) != ranges::end(unvisited)) {
+      // fmt::print("   : {}, \n", cell);
+      // Update cell to a random neighbor of cell
+      auto neighbors = grid.get_all_neighbors(cell);
+      std::uniform_int_distribution<> d(0, neighbors.size() - 1);
+      cell = neighbors[d(gen)];
+
+      // Check if cell is in our path (e.g. loop)
+      auto loop_begin =
+          ranges::find_if(path, [cell](const auto &b) { return b == cell; });
+      if (loop_begin == ranges::end(path)) {
+        // no loop
+        path.push_back(cell);
+      } else {
+        // fmt::print("Removing from path={}. {} ({})\n", path,
+        //            std::distance(std::begin(path), loop_begin), *loop_begin);
+        path.erase(std::next(loop_begin), std::end(path));
+        // fmt::print("afterr remove path={}\n", path);
+      }
+    }
+
+    fmt::print("Path done att {}, link it: {}\n", cell, path);
+    auto _ = ranges::adjacent_find(path, [&grid](auto a, auto b) {
+      grid.link(a, b);
+      return false;
+    });
+    ranges::for_each(path, [&unvisited](auto a) { unvisited.erase(a); });
+  }
 }
 
 void hunt_and_kill_maze(Grid &grid) {
@@ -423,7 +477,7 @@ std::vector<CellCoordinate> longest_path_(Grid &grid,
                                [d](auto n) { return d(n.row, n.col); }));
     step = *ranges::min_element(neighbors, ranges::less{},
                                 [d](auto c) { return d(c.row, c.col); });
-    fmt::print("Next: {} (d:{})\n", step, d(step.row, step.col));
+    // fmt::print("Next: {} (d:{})\n", step, d(step.row, step.col));
   }
   path.push_back(step);
 
