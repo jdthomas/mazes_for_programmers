@@ -19,10 +19,6 @@ namespace jt::maze {
 
 enum class Wall { Solid, Open, Boundry };
 
-struct Cell {
-  Wall down, right;
-};
-
 struct CellCoordinate {
   size_t row, col;
 };
@@ -38,7 +34,18 @@ bool operator==(const CellCoordinate &a, const CellCoordinate &b) {
 struct Grid {
   Grid(size_t width, size_t height);
   size_t width_, height_;
+
+private:
+  // TODO: Get rid of "Cell" and use extra dimension in mdspan
+  struct Cell {
+    Wall down, right;
+  };
   std::vector<Cell> cells_;
+
+  std::random_device rd;
+  std::mt19937 gen;
+
+public:
   auto as_mdspan() const {
     return stdex::mdspan<
         Cell, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
@@ -68,10 +75,26 @@ struct Grid {
            });
   }
 
+  auto cell_north(CellCoordinate c) const {
+    return c.row == 0 ? std::nullopt
+                      : std::make_optional(CellCoordinate{c.row - 1, c.col});
+  }
+  auto cell_east(CellCoordinate c) const {
+    return c.col >= (width_ - 1)
+               ? std::nullopt
+               : std::make_optional(CellCoordinate{c.row, c.col + 1});
+  }
+  auto cell_south(CellCoordinate c) const {
+    return c.row >= (height_ - 1)
+               ? std::nullopt
+               : std::make_optional(CellCoordinate{c.row + 1, c.col});
+  }
+  auto cell_west(CellCoordinate c) const {
+    return c.col == 0 ? std::nullopt
+                      : std::make_optional(CellCoordinate{c.row, c.col - 1});
+  }
+
   auto random_cell() {
-    // TODO: Move random stuffs to class
-    std::random_device rd;
-    std::mt19937 gen(rd());
     std::uniform_int_distribution<> d_w(0, width_ - 1);
     std::uniform_int_distribution<> d_h(0, height_ - 1);
     return CellCoordinate{static_cast<size_t>(d_h(gen)),
@@ -80,21 +103,16 @@ struct Grid {
 
   std::array<std::optional<CellCoordinate>, 4>
   get_connected_neighbors_(CellCoordinate c) const {
-    auto &[row, col] = c;
+    auto n = cell_north(c);
+    auto e = cell_east(c);
+    auto s = cell_south(c);
+    auto w = cell_west(c);
     auto m = as_mdspan();
     return {
-        (row > 0 && m(row - 1, col).down == Wall::Open)
-            ? std::make_optional(CellCoordinate{row - 1, col})
-            : std::nullopt,
-        (row < m.extent(0) - 1 && m(row, col).down == Wall::Open)
-            ? std::make_optional(CellCoordinate{row + 1, col})
-            : std::nullopt,
-        (col > 0 && m(row, col - 1).right == Wall::Open)
-            ? std::make_optional(CellCoordinate{row, col - 1})
-            : std::nullopt,
-        (col < m.extent(1) - 1 && m(row, col).right == Wall::Open)
-            ? std::make_optional(CellCoordinate{row, col + 1})
-            : std::nullopt,
+        n && m(n->row, n->col).down == Wall::Open ? n : std::nullopt,
+        e && m(c.row, c.col).right == Wall::Open ? e : std::nullopt,
+        s && m(c.row, c.col).down == Wall::Open ? s : std::nullopt,
+        w && m(w->row, w->col).right == Wall::Open ? w : std::nullopt,
     };
   }
 
@@ -107,20 +125,7 @@ struct Grid {
 
   std::array<std::optional<CellCoordinate>, 4>
   get_all_neighbors_(CellCoordinate c) const {
-    auto &[row, col] = c;
-    auto m = as_mdspan();
-    return {
-        (row > 0) ? std::make_optional(CellCoordinate{row - 1, col})
-                  : std::nullopt,
-        (row < m.extent(0) - 1)
-            ? std::make_optional(CellCoordinate{row + 1, col})
-            : std::nullopt,
-        (col > 0) ? std::make_optional(CellCoordinate{row, col - 1})
-                  : std::nullopt,
-        (col < m.extent(1) - 1)
-            ? std::make_optional(CellCoordinate{row, col + 1})
-            : std::nullopt,
-    };
+    return {cell_north(c), cell_east(c), cell_south(c), cell_west(c)};
   }
 
   std::vector<CellCoordinate> get_all_neighbors(CellCoordinate c) const {
@@ -129,14 +134,29 @@ struct Grid {
            ranges::views::transform([](auto o) { return *o; }) |
            ranges::to<std::vector>;
   }
+  std::optional<CellCoordinate> random_neighbor(CellCoordinate c) {
+    auto an = get_all_neighbors(c);
+    auto neighbors =
+        an | ranges::views::sample(1, gen) | ranges::to<std::vector>;
+    return neighbors.empty() ? std::nullopt : std::make_optional(neighbors[0]);
+  }
+
+  std::optional<CellCoordinate> random_closed_neighbor(CellCoordinate c) {
+    auto neighbors = get_all_neighbors(c);
+    auto r = neighbors | ranges::views::filter([this](auto n) {
+               return this->is_closed_cell(n);
+             }) |
+             ranges::views::sample(1, gen) | ranges::to<std::vector>;
+    // FIXME: Why ranges::front() no work?
+    return r.empty() ? std::nullopt : std::make_optional(r[0]);
+  }
 
   void link(CellCoordinate c1, CellCoordinate c2) {
     auto &[row_1, col_1] = c1;
     auto &[row_2, col_2] = c2;
     long dx = col_2 - col_1;
     long dy = row_2 - row_1;
-    fmt::print("linking: {}.{} to {}.{} delta: {}.{}\n", col_1, row_1, col_2,
-               row_2, dx, dy);
+    fmt::print("linking: {} to {} delta: {}.{}\n", c1, c2, dx, dy);
     if (std::abs(dx) > 1 || std::abs(dy) > 1 ||
         (std::abs(dx) > 0 && std::abs(dy) > 0))
       throw std::runtime_error("Linking cells must be neighbors");
@@ -180,7 +200,7 @@ struct Grid {
 };
 
 Grid::Grid(size_t width, size_t height)
-    : width_{width}, height_{height}, cells_{width * height} {
+    : width_{width}, height_{height}, cells_{width * height}, rd{}, gen{rd()} {
 
   auto m = as_mdspan();
   for (int row = 0; row < m.extent(0); row++) {
@@ -203,15 +223,13 @@ void binary_tree_maze(Grid &grid) {
 
   auto p = grid.positions();
   ranges::for_each(p, [&](const auto &cellcoord) {
-    auto &cell = grid(cellcoord);
-    auto go_down = d(gen) && cell.down != Wall::Boundry;
-    if (go_down) {
-      cell.down = Wall::Open;
-    } else if (cell.right != Wall::Boundry) {
-      cell.right = Wall::Open;
-    } else if (cell.down != Wall::Boundry) {
-      cell.down = Wall::Open;
-    }
+    auto go_down = d(gen);
+    auto s = grid.cell_south(cellcoord);
+    auto e = grid.cell_east(cellcoord);
+    if (s && (go_down || !e))
+      grid.link(cellcoord, *s);
+    else if (e)
+      grid.link(cellcoord, *e);
   });
 }
 
@@ -242,22 +260,13 @@ void sidewinder_maze(Grid &grid) {
 
 void random_walk_Aldous_Broder_maze(Grid &grid) {
   fmt::print("Generating maze by Aldous/Broder's\n");
-  std::random_device rd;
-  std::mt19937 gen(rd());
 
   // Select random starting cell
   auto cell = grid.random_cell();
   int unvisited = grid.width_ * grid.height_ - 1;
   while (unvisited > 0) {
     fmt::print("visiting: {}, {}\n", unvisited, cell);
-    auto neighbors = grid.get_all_neighbors(cell);
-    for (auto &n : neighbors) {
-      fmt::print("  n: {}\n", n);
-    }
-    std::uniform_int_distribution<> d_n(0, neighbors.size() - 1);
-    auto x = d_n(gen);
-    // fmt::print("Selected {} from 0-{}\n", x, neighbors.size());
-    auto neighbor = neighbors[x];
+    auto neighbor = *grid.random_neighbor(cell);
 
     if (grid.is_closed_cell(neighbor)) {
       grid.link(cell, neighbor);
@@ -274,28 +283,14 @@ void random_walk_Wilson_maze(Grid &grid) {
   std::mt19937 gen(rd());
 
   auto unvisited = grid.positions() | ranges::to<std::set>;
-
-  // Random from set :/
-  {
-    std::uniform_int_distribution<> d(0, unvisited.size() - 1);
-    auto first = std::begin(unvisited);
-    for (size_t i = d(gen); i > 0; i--) {
-      first = std::next(first);
-    }
-    unvisited.erase(first);
-  }
+  auto first = grid.random_cell();
+  unvisited.erase(first);
 
   while (unvisited.size() > 0) {
     fmt::print("unvisited: {}\n", unvisited.size());
-    // Random from set :/
-    auto cell_i = std::begin(unvisited);
-    {
-      std::uniform_int_distribution<> d(0, unvisited.size() - 1);
-      for (size_t i = d(gen); i > 0; i--) {
-        cell_i = std::next(cell_i);
-      }
-    }
-    auto cell = *cell_i;
+    auto cell_t =
+        unvisited | ranges::views::sample(1, gen) | ranges::to<std::vector>;
+    auto cell = cell_t[0];
     // fmt::print("cell: {} dis={}\n", cell,
     // std::distance(std::begin(unvisited), cell_i));
     assert(unvisited.find(cell) != ranges::end(unvisited));
@@ -304,9 +299,7 @@ void random_walk_Wilson_maze(Grid &grid) {
     while (unvisited.find(cell) != ranges::end(unvisited)) {
       // fmt::print("   : {}, \n", cell);
       // Update cell to a random neighbor of cell
-      auto neighbors = grid.get_all_neighbors(cell);
-      std::uniform_int_distribution<> d(0, neighbors.size() - 1);
-      cell = neighbors[d(gen)];
+      cell = *grid.random_neighbor(cell);
 
       // Check if cell is in our path (e.g. loop)
       auto loop_begin =
@@ -333,42 +326,27 @@ void random_walk_Wilson_maze(Grid &grid) {
 
 void hunt_and_kill_maze(Grid &grid) {
   fmt::print("Generating maze by hunting and killing \n");
-  std::random_device rd;
-  std::mt19937 gen(rd());
   std::optional<CellCoordinate> current = grid.random_cell();
 
   while (current) {
-    auto neighborhood = grid.get_all_neighbors(*current);
-    auto neighbors = neighborhood | ranges::views::filter([grid](auto n) {
-                       return grid.is_closed_cell(n);
-                     }) |
-                     ranges::to<std::vector>;
+    auto n = grid.random_closed_neighbor(*current);
 
-    // fmt::print("current: {}.{}, neighbors: {}\n", row, col, neighbors);
-
-    if (!neighbors.empty()) {
-      std::uniform_int_distribution<> d(0, neighbors.size() - 1);
-      auto n = neighbors[d(gen)];
-      grid.link(*current, n);
+    if (bool(n)) {
+      grid.link(*current, *n);
       current = n;
     } else {
-      current = std::nullopt;
-
-      // fmt::print("hunting...\n");
-      for (auto pos : grid.positions()) {
-        // if pos is not closed cell and has at least one closed cell neighbor,
-        // set current to pos and break
+      auto p = grid.positions();
+      auto next = ranges::find_if(p, [&](auto pos) {
         auto n = grid.get_all_neighbors(pos);
         auto unvisited_neighbors_of_pos =
-            ranges::accumulate(n | ranges::views::transform([grid](auto np) {
+            ranges::accumulate(n | ranges::views::transform([&grid](auto np) {
                                  return grid.is_closed_cell(np) ? 1 : 0;
                                }),
                                0);
-        if (!grid.is_closed_cell(pos) && unvisited_neighbors_of_pos > 0) {
-          current = pos;
-          break;
-        }
-      }
+        return (!grid.is_closed_cell(pos) && unvisited_neighbors_of_pos > 0);
+      });
+      current =
+          (next == ranges::end(p)) ? std::nullopt : std::make_optional(*next);
     }
   }
 }
@@ -376,27 +354,18 @@ void hunt_and_kill_maze(Grid &grid) {
 void recursive_backtracking_maze(Grid &grid) {
   fmt::print("Generating maze by backtracking\n");
 
-  std::random_device rd;
-  std::mt19937 gen(rd());
-
   std::vector<CellCoordinate> stack;
   stack.push_back(grid.random_cell());
 
   while (!stack.empty()) {
     auto current = stack.back();
 
-    auto neighborhood = grid.get_all_neighbors(current);
-    auto neighbors = neighborhood | ranges::views::filter([grid](auto n) {
-                       return grid.is_closed_cell(n);
-                     }) |
-                     ranges::to<std::vector>;
-    if (neighbors.empty()) {
-      stack.pop_back();
+    auto n = grid.random_closed_neighbor(current);
+    if (bool(n)) {
+      grid.link(current, *n);
+      stack.push_back(*n);
     } else {
-      std::uniform_int_distribution<> d(0, neighbors.size() - 1);
-      auto n = neighbors[d(gen)];
-      grid.link(current, n);
-      stack.push_back(n);
+      stack.pop_back();
     }
   }
 }
@@ -517,7 +486,7 @@ fmt::formatter<jt::maze::CellCoordinate>::parse(ParseContext &ctx) {
 template <typename FormatContext>
 auto fmt::formatter<jt::maze::CellCoordinate>::format(
     jt::maze::CellCoordinate const &coord, FormatContext &ctx) {
-  return fmt::format_to(ctx.out(), "{}x{}", coord.row, coord.col);
+  return fmt::format_to(ctx.out(), "[{},{}]", coord.row, coord.col);
 }
 
 template <> struct fmt::formatter<jt::maze::Grid> {
@@ -700,7 +669,7 @@ auto gen_maze(jt::maze::Grid &grid) {
   return distances;
 }
 
-void gui_main(jt::maze::Grid grid, std::vector<int> distances,
+void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
               std::vector<jt::maze::CellCoordinate> path) {
 
   auto d = stdex::mdspan<
@@ -708,7 +677,7 @@ void gui_main(jt::maze::Grid grid, std::vector<int> distances,
       distances.data(), grid.height_, grid.width_);
   auto max_path_len = *std::max_element(distances.begin(), distances.end());
   std::function<sf::Color(const jt::maze::Grid &, int, int)> colorizer =
-      [&](auto g, auto c, auto r) {
+      [&max_path_len, &d](auto &g, auto c, auto r) {
         int shade = 255 * d(c, r) / max_path_len;
         return sf::Color(shade, shade, shade);
       };
