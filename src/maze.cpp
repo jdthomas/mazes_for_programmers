@@ -239,23 +239,22 @@ void sidewinder_maze(Grid &grid) {
   std::mt19937 gen(rd());
   std::bernoulli_distribution d(0.5);
 
-  for (size_t row = 0; row < grid.height_; row++) {
-    for (size_t col = 0, run_start = 0; col < grid.width_; col++) {
-      bool at_vert_boundry = grid(row, col).down == Wall::Boundry;
-      bool at_horz_boundry = grid(row, col).right == Wall::Boundry;
-      bool should_close = at_horz_boundry || (!at_vert_boundry && d(gen));
-      if (should_close) {
-        std::uniform_int_distribution<> distrib(run_start, col);
-        size_t c = static_cast<size_t>(distrib(gen));
-        // grid(row, c).down = Wall::Open;
-        grid.link({row, c}, {row + 1, c});
-        assert(grid(row, c).down == Wall::Open);
-        run_start = col + 1;
-      } else {
-        grid(row, col).right = Wall::Open;
-      }
+  auto p = grid.positions();
+  size_t run_start = 0;
+  ranges::for_each(p, [&](const auto &cell) {
+    auto &[row, col] = cell;
+    auto e = grid.cell_east(cell);
+    auto s = grid.cell_south(cell);
+    bool should_close = !e || (bool(s) && d(gen));
+    if (should_close) {
+      std::uniform_int_distribution<> distrib(run_start, col);
+      size_t c = static_cast<size_t>(distrib(gen));
+      grid.link({row, c}, {row + 1, c});
+      run_start = (col + 1) % grid.width_;
+    } else {
+      grid.link(cell, *e);
     }
-  }
+  });
 }
 
 void random_walk_Aldous_Broder_maze(Grid &grid) {
@@ -309,7 +308,8 @@ void random_walk_Wilson_maze(Grid &grid) {
         path.push_back(cell);
       } else {
         // fmt::print("Removing from path={}. {} ({})\n", path,
-        //            std::distance(std::begin(path), loop_begin), *loop_begin);
+        //            std::distance(std::begin(path), loop_begin),
+        //            *loop_begin);
         path.erase(std::next(loop_begin), std::end(path));
         // fmt::print("afterr remove path={}\n", path);
       }
