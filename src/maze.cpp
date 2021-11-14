@@ -9,6 +9,7 @@
 #include <random>
 #include <range/v3/all.hpp>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 #include <SFML/Graphics.hpp>
@@ -63,6 +64,7 @@ public:
     return m(row, col);
   }
 
+  // Helper to generate all CellCoordinate for each cell
   auto positions() const {
     return ranges::views::cartesian_product(
                ranges::views::iota(static_cast<size_t>(0),
@@ -75,6 +77,7 @@ public:
            });
   }
 
+  // Helpers to get neighboring CellCoordinate for each direction
   auto cell_north(CellCoordinate c) const {
     return c.row == 0 ? std::nullopt
                       : std::make_optional(CellCoordinate{c.row - 1, c.col});
@@ -94,6 +97,7 @@ public:
                       : std::make_optional(CellCoordinate{c.row, c.col - 1});
   }
 
+  // Generate a random CellCoordinate within the grid
   auto random_cell() {
     std::uniform_int_distribution<> d_w(0, width_ - 1);
     std::uniform_int_distribution<> d_h(0, height_ - 1);
@@ -101,6 +105,7 @@ public:
                           static_cast<size_t>(d_w(gen))};
   }
 
+  // Helpers for getting all connected neighbors
   std::array<std::optional<CellCoordinate>, 4>
   get_connected_neighbors_(CellCoordinate c) const {
     auto n = cell_north(c);
@@ -123,6 +128,7 @@ public:
            ranges::to<std::vector>;
   }
 
+  // Helpers for getting all neighbors
   std::array<std::optional<CellCoordinate>, 4>
   get_all_neighbors_(CellCoordinate c) const {
     return {cell_north(c), cell_east(c), cell_south(c), cell_west(c)};
@@ -134,6 +140,8 @@ public:
            ranges::views::transform([](auto o) { return *o; }) |
            ranges::to<std::vector>;
   }
+
+  // Helper for getting random neighbor
   std::optional<CellCoordinate> random_neighbor(CellCoordinate c) {
     auto an = get_all_neighbors(c);
     auto neighbors =
@@ -141,6 +149,7 @@ public:
     return neighbors.empty() ? std::nullopt : std::make_optional(neighbors[0]);
   }
 
+  // Helper for getting a random neighbor that is closed (no connections)
   std::optional<CellCoordinate> random_closed_neighbor(CellCoordinate c) {
     auto neighbors = get_all_neighbors(c);
     auto r = neighbors | ranges::views::filter([this](auto n) {
@@ -151,12 +160,13 @@ public:
     return r.empty() ? std::nullopt : std::make_optional(r[0]);
   }
 
+  // Helper for linking two cells togetherr (must be neighbors)
   void link(CellCoordinate c1, CellCoordinate c2) {
     auto &[row_1, col_1] = c1;
     auto &[row_2, col_2] = c2;
     long dx = col_2 - col_1;
     long dy = row_2 - row_1;
-    fmt::print("linking: {} to {} delta: {}.{}\n", c1, c2, dx, dy);
+    // fmt::print("linking: {} to {} delta: {}.{}\n", c1, c2, dx, dy);
     if (std::abs(dx) > 1 || std::abs(dy) > 1 ||
         (std::abs(dx) > 0 && std::abs(dy) > 0))
       throw std::runtime_error("Linking cells must be neighbors");
@@ -164,19 +174,20 @@ public:
     auto m = as_mdspan();
     if (dx == -1) {
       m(row_1, col_1 - 1).right = Wall::Open;
-      fmt::print("Setting right of {} {}\n", col_1 - 1, row_1);
+      // fmt::print("Setting right of {} {}\n", col_1 - 1, row_1);
     } else if (dx == 1) {
       m(row_1, col_1).right = Wall::Open;
-      fmt::print("Setting right of {} {}\n", col_1, row_1);
+      // fmt::print("Setting right of {} {}\n", col_1, row_1);
     } else if (dy == -1) {
       m(row_1 - 1, col_1).down = Wall::Open;
-      fmt::print("Setting down of {} {}\n", col_1, row_1 - 1);
+      // fmt::print("Setting down of {} {}\n", col_1, row_1 - 1);
     } else if (dy == 1) {
       m(row_1, col_1).down = Wall::Open;
-      fmt::print("Setting down of {} {}\n", col_1, row_1);
+      // fmt::print("Setting down of {} {}\n", col_1, row_1);
     }
   }
 
+  // Helper to check if a cell has no connections
   bool is_closed_cell(CellCoordinate c) const {
     auto tmp = get_connected_neighbors_(c);
     return ranges::accumulate(
@@ -184,6 +195,7 @@ public:
                0) == 0;
   }
 
+  // Helper to check if a cell is a dead end (has only one connecttion)
   bool is_dead_end_cell(CellCoordinate c) const {
     auto tmp = get_connected_neighbors_(c);
     return ranges::accumulate(
@@ -191,6 +203,7 @@ public:
                0) == 1;
   }
 
+  // Reset grid to all solid walls
   void reset() {
     for (auto &c : cells_) {
       c.down = Wall::Solid;
@@ -264,7 +277,7 @@ void random_walk_Aldous_Broder_maze(Grid &grid) {
   auto cell = grid.random_cell();
   int unvisited = grid.width_ * grid.height_ - 1;
   while (unvisited > 0) {
-    fmt::print("visiting: {}, {}\n", unvisited, cell);
+    // fmt::print("visiting: {}, {}\n", unvisited, cell);
     auto neighbor = *grid.random_neighbor(cell);
 
     if (grid.is_closed_cell(neighbor)) {
@@ -286,7 +299,7 @@ void random_walk_Wilson_maze(Grid &grid) {
   unvisited.erase(first);
 
   while (unvisited.size() > 0) {
-    fmt::print("unvisited: {}\n", unvisited.size());
+    // fmt::print("unvisited: {}\n", unvisited.size());
     auto cell_t =
         unvisited | ranges::views::sample(1, gen) | ranges::to<std::vector>;
     auto cell = cell_t[0];
@@ -637,11 +650,6 @@ void draw_maze(
     }
   }
 
-  // auto p = grid.positions() | ranges::views::transform([](auto p) {
-  //            auto [i, j] = p;
-  //            return std::make_pair(i, j);
-  //          }) |
-  //          ranges::to<std::vector>;
   draw_path(grid, window, path);
 }
 
@@ -665,6 +673,14 @@ auto gen_maze(jt::maze::Grid &grid) {
   auto distances =
       dijkstra_distances(grid, {grid.width_ / 2, grid.height_ / 2});
   fmt::print("D:{}\n", distances);
+
+  auto p = grid.positions();
+  auto dead_ends =
+      ranges::accumulate(p | ranges::views::transform([&grid](auto pos) {
+                           return grid.is_dead_end_cell(pos) ? 1 : 0;
+                         }),
+                         0);
+  fmt::print("Dead ends: {}\n", dead_ends);
 
   return distances;
 }
@@ -725,6 +741,23 @@ void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
   }
 }
 
+std::string method_name(char m) {
+  switch (m) {
+  case 'B':
+    return "BinaryTree";
+  case 'S':
+    return "Sidewinder";
+  case 'R':
+    return "AldousBroder";
+  case 'W':
+    return "Wilson";
+  case 'K':
+    return "HuntAndKill";
+  case 'C':
+    return "RecursiveBacktraking";
+  }
+  return "unknown";
+}
 int main(int argc, char **argv) {
 
   if (argc < 3)
@@ -732,6 +765,39 @@ int main(int argc, char **argv) {
   jt::maze::Grid grid{static_cast<size_t>(std::strtol(argv[1], nullptr, 10)),
                       static_cast<size_t>(std::strtol(argv[2], nullptr, 10))};
   method = argv[3][0];
+
+  // stats?
+  if (method == 'X') {
+    std::unordered_map<char, float> averages;
+    // we run stats instead!
+    for (auto m : {'B', 'S', 'R', 'W', 'K', 'C'}) {
+      method = m;
+      std::vector<int> dead_count;
+      for (int i = 0; i < 100; i++) {
+        grid.reset();
+        gen_maze(grid);
+        auto p = grid.positions();
+        auto dead_ends =
+            ranges::accumulate(p | ranges::views::transform([&grid](auto pos) {
+                                 return grid.is_dead_end_cell(pos) ? 1 : 0;
+                               }),
+                               0);
+        dead_count.push_back(dead_ends);
+      }
+      averages[m] =
+          float(ranges::accumulate(dead_count, 0)) / dead_count.size();
+    }
+    auto cell_count = grid.width_ * grid.height_;
+    fmt::print("Average dead-ends per {}x#{} maze ({} cells):\n", grid.width_,
+               grid.height_, cell_count);
+    for (auto kv : averages) {
+      auto &[k, v] = kv;
+      fmt::print("{}: {}/{} ({}%)\n", method_name(k), v, cell_count,
+                 100 * v / cell_count);
+      // AldousBroder : 115/400 (28%)
+    }
+    exit(0);
+  }
 
   auto distances = gen_maze(grid);
 
