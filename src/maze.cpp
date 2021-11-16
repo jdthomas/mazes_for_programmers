@@ -17,6 +17,13 @@
 namespace stdex = std::experimental;
 
 namespace jt::maze {
+// Not sure why ranges::front() is not working for my sampled ranges, but
+// this seems to do the trick.
+template <typename R> auto jt_range_front(R &&rng) {
+  return (ranges::begin(rng) == ranges::end(rng))
+             ? std::nullopt
+             : std::make_optional(*ranges::begin(rng));
+}
 
 enum class Wall { Solid, Open, Boundry };
 
@@ -144,20 +151,16 @@ public:
   // Helper for getting random neighbor
   std::optional<CellCoordinate> random_neighbor(CellCoordinate c) {
     auto an = get_all_neighbors(c);
-    auto neighbors =
-        an | ranges::views::sample(1, gen) | ranges::to<std::vector>;
-    return neighbors.empty() ? std::nullopt : std::make_optional(neighbors[0]);
+    return jt_range_front(an | ranges::views::sample(1, gen));
   }
 
   // Helper for getting a random neighbor that is closed (no connections)
   std::optional<CellCoordinate> random_closed_neighbor(CellCoordinate c) {
     auto neighbors = get_all_neighbors(c);
-    auto r = neighbors | ranges::views::filter([this](auto n) {
-               return this->is_closed_cell(n);
-             }) |
-             ranges::views::sample(1, gen) | ranges::to<std::vector>;
-    // FIXME: Why ranges::front() no work?
-    return r.empty() ? std::nullopt : std::make_optional(r[0]);
+    return jt_range_front(neighbors | ranges::views::filter([this](auto n) {
+                            return this->is_closed_cell(n);
+                          }) |
+                          ranges::views::sample(1, gen));
   }
 
   // Helper for linking two cells togetherr (must be neighbors)
@@ -224,6 +227,9 @@ Grid::Grid(size_t width, size_t height)
   }
 };
 
+// TODO: Some meta structure here to hold the grid + distances + name of method
+// + ...
+
 }; // namespace jt::maze
 
 namespace jt::maze {
@@ -258,7 +264,7 @@ void sidewinder_maze(Grid &grid) {
     auto &[row, col] = cell;
     auto e = grid.cell_east(cell);
     auto s = grid.cell_south(cell);
-    bool should_close = !e || (bool(s) && d(gen));
+    bool should_close = !e || (s && d(gen));
     if (should_close) {
       std::uniform_int_distribution<> distrib(run_start, col);
       size_t c = static_cast<size_t>(distrib(gen));
@@ -300,9 +306,7 @@ void random_walk_Wilson_maze(Grid &grid) {
 
   while (unvisited.size() > 0) {
     // fmt::print("unvisited: {}\n", unvisited.size());
-    auto cell_t =
-        unvisited | ranges::views::sample(1, gen) | ranges::to<std::vector>;
-    auto cell = cell_t[0];
+    auto cell = *jt_range_front(unvisited | ranges::views::sample(1, gen));
     // fmt::print("cell: {} dis={}\n", cell,
     // std::distance(std::begin(unvisited), cell_i));
     assert(unvisited.find(cell) != ranges::end(unvisited));
@@ -344,7 +348,7 @@ void hunt_and_kill_maze(Grid &grid) {
   while (current) {
     auto n = grid.random_closed_neighbor(*current);
 
-    if (bool(n)) {
+    if (n) {
       grid.link(*current, *n);
       current = n;
     } else {
@@ -374,7 +378,7 @@ void recursive_backtracking_maze(Grid &grid) {
     auto current = stack.back();
 
     auto n = grid.random_closed_neighbor(current);
-    if (bool(n)) {
+    if (n) {
       grid.link(current, *n);
       stack.push_back(*n);
     } else {
