@@ -2,6 +2,7 @@
 #include <array>
 #include <cmath>
 #include <deque>
+#include <execution>
 #include <experimental/mdspan>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -251,7 +252,7 @@ void binary_tree_maze(Grid &grid) {
   std::bernoulli_distribution d(0.5);
 
   auto p = grid.positions();
-  ranges::for_each(p, [&](const auto &cellcoord) {
+  ranges::for_each(/*std::execution::par,*/ p, [&](const auto &cellcoord) {
     auto go_down = d(gen);
     auto s = grid.cell_south(cellcoord);
     auto e = grid.cell_east(cellcoord);
@@ -270,6 +271,9 @@ void sidewinder_maze(Grid &grid) {
 
   auto p = grid.positions();
   size_t run_start = 0;
+  // This depends on the fact that grid.positions is in row-col order. You
+  // could parallize by row by keeping row_start separate, would still depend
+  // on iterating within row in order though.
   ranges::for_each(p, [&](const auto &cell) {
     auto &[row, col] = cell;
     auto e = grid.cell_east(cell);
@@ -289,11 +293,9 @@ void sidewinder_maze(Grid &grid) {
 void random_walk_Aldous_Broder_maze(Grid &grid) {
   fmt::print("Generating maze by Aldous/Broder's\n");
 
-  // Select random starting cell
   auto cell = grid.random_cell();
   int unvisited = grid.width_ * grid.height_ - 1;
   while (unvisited > 0) {
-    // fmt::print("visiting: {}, {}\n", unvisited, cell);
     auto neighbor = *grid.random_neighbor(cell);
 
     if (grid.is_closed_cell(neighbor)) {
@@ -381,8 +383,7 @@ void hunt_and_kill_maze(Grid &grid) {
 void recursive_backtracking_maze(Grid &grid) {
   fmt::print("Generating maze by backtracking\n");
 
-  std::vector<CellCoordinate> stack;
-  stack.push_back(grid.random_cell());
+  std::vector<CellCoordinate> stack{grid.random_cell()};
 
   while (!stack.empty()) {
     auto current = stack.back();
@@ -403,7 +404,7 @@ auto dijkstra_distances(const Grid &grid, CellCoordinate start_cell) {
 
   fmt::print("Computing distances using dijkstra from {} \n", start_cell);
   std::vector<int> distances(grid.width_ * grid.height_);
-  auto m = stdex::mdspan<
+  auto cell_distances = stdex::mdspan<
       int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
       distances.data(), grid.height_, grid.width_);
 
@@ -411,10 +412,10 @@ auto dijkstra_distances(const Grid &grid, CellCoordinate start_cell) {
     auto current = q.front();
     auto &[cell, depth] = current;
     q.pop_front();
-    if (m(cell.row, cell.col) != 0) {
+    if (cell_distances(cell.row, cell.col) != 0) {
       continue;
     }
-    m(cell.row, cell.col) = depth;
+    cell_distances(cell.row, cell.col) = depth;
     auto neighbors = grid.get_connected_neighbors(cell);
     ranges::transform(neighbors, ranges::back_inserter(q),
                       [d = depth + 1](auto n) {
@@ -587,8 +588,8 @@ void draw_path(const jt::maze::Grid &grid, sf::RenderWindow &window,
       });
 }
 
-
-static char method = 'B';
+static size_t method = 0;
+std::array<char, 6> all_methods{'B', 'S', 'R', 'W', 'K', 'C'};
 std::string method_name(char m) {
   switch (m) {
   case 'B':
@@ -695,25 +696,33 @@ void draw_maze(
   });
   sf::Text text;
   text.setFont(font);
-  text.setString(method_name(method));
+  text.setString(method_name(all_methods[method]));
   text.setCharacterSize(22); // in pixels, not points!
   text.setFillColor(sf::Color::White);
   window.draw(text);
 }
 
 auto gen_maze(jt::maze::Grid &grid) {
-  if (method == 'B') {
+  auto method_c = all_methods[method];
+  switch (method_c) {
+  case 'B':
     binary_tree_maze(grid);
-  } else if (method == 'S') {
+    break;
+  case 'S':
     sidewinder_maze(grid);
-  } else if (method == 'R') {
+    break;
+  case 'R':
     random_walk_Aldous_Broder_maze(grid);
-  } else if (method == 'W') {
+    break;
+  case 'W':
     random_walk_Wilson_maze(grid);
-  } else if (method == 'K') {
+    break;
+  case 'K':
     hunt_and_kill_maze(grid);
-  } else if (method == 'C') {
+    break;
+  case 'C':
     recursive_backtracking_maze(grid);
+    break;
   }
   fmt::print("{}\n", grid);
   auto distances =
@@ -747,6 +756,18 @@ void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
   // create the window
   sf::RenderWindow window(sf::VideoMode(800, 600), "Maze window");
 
+  auto regen_maze = [&]() {
+    fmt::print("Regenerating maze!\n");
+    grid.reset();
+    distances = gen_maze(grid);
+
+    path = longest_path_(grid, distances);
+    d = stdex::mdspan<
+        int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
+        distances.data(), grid.height_, grid.width_);
+    max_path_len = *std::max_element(distances.begin(), distances.end());
+  };
+
   // run the program as long as the window is open
   while (window.isOpen()) {
     // check all the window's events that were triggered since the last
@@ -758,17 +779,23 @@ void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
       case sf::Event::Closed:
         window.close();
         break;
+
+      case sf::Event::TextEntered:
+        switch (event.text.unicode) {
+        case 'j':
+        case 'J':
+          method = (method + 1) % all_methods.size();
+          break;
+        case 'k':
+        case 'K':
+          method = (method + all_methods.size() - 1) % all_methods.size();
+          break;
+        }
+        regen_maze();
+        break;
       case sf::Event::KeyPressed:
         if (event.key.code == sf::Keyboard::Space) {
-          fmt::print("Regenerating maze!\n");
-          grid.reset();
-          distances = gen_maze(grid);
-
-          path = longest_path_(grid, distances);
-          d = stdex::mdspan<int, stdex::extents<stdex::dynamic_extent,
-                                                stdex::dynamic_extent>>(
-              distances.data(), grid.height_, grid.width_);
-          max_path_len = *std::max_element(distances.begin(), distances.end());
+          regen_maze();
         }
         break;
       default:
@@ -793,14 +820,18 @@ int main(int argc, char **argv) {
     return 1;
   jt::maze::Grid grid{static_cast<size_t>(std::strtol(argv[1], nullptr, 10)),
                       static_cast<size_t>(std::strtol(argv[2], nullptr, 10))};
-  method = argv[3][0];
-
+  auto method_id_for_char = [](auto m) {
+    return std::distance(
+        std::begin(all_methods),
+        std::find(std::begin(all_methods), std::end(all_methods), m));
+  };
+  method = method_id_for_char(argv[3][0]);
   // stats?
-  if (method == 'X') {
+  if (argv[3][0] == 'X') {
     std::unordered_map<char, float> averages;
     // we run stats instead!
-    for (auto m : {'B', 'S', 'R', 'W', 'K', 'C'}) {
-      method = m;
+    for (auto m : all_methods) {
+      method = method_id_for_char(m);
       std::vector<int> dead_count;
       for (int i = 0; i < 100; i++) {
         grid.reset();
