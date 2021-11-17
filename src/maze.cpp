@@ -245,12 +245,8 @@ Grid::Grid(size_t width, size_t height)
 //
 // };
 
-}; // namespace jt::maze
-
-namespace jt::maze {
 
 void binary_tree_maze(Grid &grid) {
-  fmt::print("Generating maze by binary tree\n");
   std::random_device rd;
   std::mt19937 gen(rd());
   std::bernoulli_distribution d(0.5);
@@ -265,51 +261,16 @@ void binary_tree_maze(Grid &grid) {
                     grid.link(cell, *e);
   };
 
-#if 1
   auto p = grid.positions();
   std::for_each(pstl::execution::par, p.begin(), p.end(),
                 per_cell_action);
-#else
-  // Might be able to do better if we run rows in parallel but sequentially
-  // columns for data locality .
-  auto r = ranges::views::iota(static_cast<size_t>(0),
-                               static_cast<size_t>(grid.height_));
-  std::for_each(pstl::execution::par_unseq, r.begin(), r.end(),
-                [&per_cell_action, width=grid.width_](const auto &row) {
-                  for (size_t col = 0; col < width; col++) {
-                    per_cell_action(CellCoordinate{row,col});
-                  }
-                });
-#endif
 }
 
 void sidewinder_maze(Grid &grid) {
-  fmt::print("Generating maze by sidewinder\n");
   std::random_device rd;
   std::mt19937 gen(rd());
   std::bernoulli_distribution d(0.5);
 
-#if 0
-  auto p = grid.positions();
-  size_t run_start = 0;
-  // This depends on the fact that grid.positions is in row-col order. You
-  // could parallize by row by keeping row_start separate, would still depend
-  // on iterating within row in order though.
-  ranges::for_each(p, [&](const auto &cell) {
-    auto &[row, col] = cell;
-    auto e = grid.cell_east(cell);
-    auto s = grid.cell_south(cell);
-    bool should_close = !e || (s && d(gen));
-    if (should_close) {
-      std::uniform_int_distribution<> distrib(run_start, col);
-      size_t c = static_cast<size_t>(distrib(gen));
-      grid.link({row, c}, {row + 1, c});
-      run_start = (col + 1) % grid.width_;
-    } else {
-      grid.link(cell, *e);
-    }
-  });
-#else
   auto r = ranges::views::iota(static_cast<size_t>(0),
                                static_cast<size_t>(grid.height_));
   std::for_each(pstl::execution::par_unseq, r.begin(), r.end(),
@@ -329,12 +290,9 @@ void sidewinder_maze(Grid &grid) {
                     }
                   }
                 });
-#endif
 }
 
 void random_walk_Aldous_Broder_maze(Grid &grid) {
-  fmt::print("Generating maze by Aldous/Broder's\n");
-
   auto cell = grid.random_cell();
   int unvisited = grid.width_ * grid.height_ - 1;
   while (unvisited > 0) {
@@ -350,7 +308,6 @@ void random_walk_Aldous_Broder_maze(Grid &grid) {
 }
 
 void random_walk_Wilson_maze(Grid &grid) {
-  fmt::print("Generating maze by Wilson's\n");
   std::random_device rd;
   std::mt19937 gen(rd());
 
@@ -396,7 +353,6 @@ void random_walk_Wilson_maze(Grid &grid) {
 }
 
 void hunt_and_kill_maze(Grid &grid) {
-  fmt::print("Generating maze by hunting and killing \n");
   std::optional<CellCoordinate> current = grid.random_cell();
 
   while (current) {
@@ -423,8 +379,6 @@ void hunt_and_kill_maze(Grid &grid) {
 }
 
 void recursive_backtracking_maze(Grid &grid) {
-  fmt::print("Generating maze by backtracking\n");
-
   std::vector<CellCoordinate> stack{grid.random_cell()};
 
   while (!stack.empty()) {
@@ -530,6 +484,76 @@ std::vector<CellCoordinate> longest_path_(Grid &grid,
 }
 }; // namespace jt::maze
 
+
+static size_t method = 0;
+std::array<char, 6> all_methods{'B', 'S', 'R', 'W', 'K', 'C'};
+std::string method_name(char m) {
+  switch (m) {
+  case 'B':
+    return "BinaryTree";
+  case 'S':
+    return "Sidewinder";
+  case 'R':
+    return "AldousBroder";
+  case 'W':
+    return "Wilson";
+  case 'K':
+    return "HuntAndKill";
+  case 'C':
+    return "RecursiveBacktraking";
+  }
+  return "unknown";
+}
+
+auto gen_maze(jt::maze::Grid &grid) {
+  fmt::print("Generating maze by {}\n", method_name(all_methods[method]));
+  auto method_c = all_methods[method];
+  using std::chrono::high_resolution_clock;
+  auto t1 = high_resolution_clock::now();
+  switch (method_c) {
+  case 'B':
+    binary_tree_maze(grid);
+    break;
+  case 'S':
+    sidewinder_maze(grid);
+    break;
+  case 'R':
+    random_walk_Aldous_Broder_maze(grid);
+    break;
+  case 'W':
+    random_walk_Wilson_maze(grid);
+    break;
+  case 'K':
+    hunt_and_kill_maze(grid);
+    break;
+  case 'C':
+    recursive_backtracking_maze(grid);
+    break;
+  }
+  auto t2 = high_resolution_clock::now();
+
+  std::chrono::duration<double, std::milli> delta_ms = t2 - t1;
+  fmt::print("Generated maze in {}\n", delta_ms);
+  fmt::print("{}\n", grid);
+  auto distances =
+      dijkstra_distances(grid, {grid.width_ / 2, grid.height_ / 2});
+  // fmt::print("D:{}\n", distances);
+
+  auto p = grid.positions();
+  auto dead_ends =
+      ranges::accumulate(p | ranges::views::transform([&grid](auto pos) {
+                           return grid.is_dead_end_cell(pos) ? 1 : 0;
+                         }),
+                         0);
+  fmt::print("Dead ends: {}\n", dead_ends);
+
+  return distances;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Ascii output
+////////////////////////////////////////////////////////////////////////////////
 static char h_wall_to_char(const jt::maze::Wall wall) {
   return wall == jt::maze::Wall::Open    ? ' '
          : wall == jt::maze::Wall::Solid ? '-'
@@ -603,6 +627,11 @@ auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
   return fmt::format_to(ctx.out(), "... {} x {}\n", grid.width_, grid.height_);
 }
 
+
+
+////////////////////////////////////////////////////////////////////////////////
+// GUI output
+////////////////////////////////////////////////////////////////////////////////
 void draw_path(const jt::maze::Grid &grid, sf::RenderWindow &window,
                std::vector<jt::maze::CellCoordinate> &path) {
   const float cell_width = 800.0 / (grid.width_ + 2);
@@ -632,26 +661,6 @@ void draw_path(const jt::maze::Grid &grid, sf::RenderWindow &window,
         return sf::Vertex(sf::Vector2f(draw_pos.first, draw_pos.second),
                           line_color);
       });
-}
-
-static size_t method = 0;
-std::array<char, 6> all_methods{'B', 'S', 'R', 'W', 'K', 'C'};
-std::string method_name(char m) {
-  switch (m) {
-  case 'B':
-    return "BinaryTree";
-  case 'S':
-    return "Sidewinder";
-  case 'R':
-    return "AldousBroder";
-  case 'W':
-    return "Wilson";
-  case 'K':
-    return "HuntAndKill";
-  case 'C':
-    return "RecursiveBacktraking";
-  }
-  return "unknown";
 }
 
 void draw_maze(
@@ -746,50 +755,6 @@ void draw_maze(
   text.setCharacterSize(22); // in pixels, not points!
   text.setFillColor(sf::Color::White);
   window.draw(text);
-}
-
-auto gen_maze(jt::maze::Grid &grid) {
-  auto method_c = all_methods[method];
-  using std::chrono::high_resolution_clock;
-  auto t1 = high_resolution_clock::now();
-  switch (method_c) {
-  case 'B':
-    binary_tree_maze(grid);
-    break;
-  case 'S':
-    sidewinder_maze(grid);
-    break;
-  case 'R':
-    random_walk_Aldous_Broder_maze(grid);
-    break;
-  case 'W':
-    random_walk_Wilson_maze(grid);
-    break;
-  case 'K':
-    hunt_and_kill_maze(grid);
-    break;
-  case 'C':
-    recursive_backtracking_maze(grid);
-    break;
-  }
-  auto t2 = high_resolution_clock::now();
-
-  std::chrono::duration<double, std::milli> delta_ms = t2 - t1;
-  fmt::print("Generated maze in {}\n", delta_ms);
-  fmt::print("{}\n", grid);
-  auto distances =
-      dijkstra_distances(grid, {grid.width_ / 2, grid.height_ / 2});
-  // fmt::print("D:{}\n", distances);
-
-  auto p = grid.positions();
-  auto dead_ends =
-      ranges::accumulate(p | ranges::views::transform([&grid](auto pos) {
-                           return grid.is_dead_end_cell(pos) ? 1 : 0;
-                         }),
-                         0);
-  fmt::print("Dead ends: {}\n", dead_ends);
-
-  return distances;
 }
 
 void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
