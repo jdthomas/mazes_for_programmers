@@ -2,11 +2,13 @@
   "name": "mazes",
   "version-string": "1.0.0",
   "dependencies": [
-    "fmt",
-    "mdspan",
-    "gtest",
     "benchmark",
+    "fmt",
+    "gtest",
+    "mdspan",
+    "parallelstl",
     "range-v3",
+    "tbb",
     "sfml"
   ]
 }

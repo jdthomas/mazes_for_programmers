@@ -1,12 +1,16 @@
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <deque>
-#include <execution>
 #include <experimental/mdspan>
+#include <fmt/chrono.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <iostream>
+#include <mutex>
+#include <pstl/algorithm>
+#include <pstl/execution>
 #include <random>
 #include <range/v3/all.hpp>
 #include <set>
@@ -251,16 +255,32 @@ void binary_tree_maze(Grid &grid) {
   std::mt19937 gen(rd());
   std::bernoulli_distribution d(0.5);
 
+  auto per_cell_action = [&grid,&d,&gen](const auto &cell) {
+                  auto go_down = d(gen);
+                  auto s = grid.cell_south(cell);
+                  auto e = grid.cell_east(cell);
+                  if (s && (go_down || !e))
+                    grid.link(cell, *s);
+                  else if (e)
+                    grid.link(cell, *e);
+  };
+
+#if 1
   auto p = grid.positions();
-  ranges::for_each(/*std::execution::par,*/ p, [&](const auto &cellcoord) {
-    auto go_down = d(gen);
-    auto s = grid.cell_south(cellcoord);
-    auto e = grid.cell_east(cellcoord);
-    if (s && (go_down || !e))
-      grid.link(cellcoord, *s);
-    else if (e)
-      grid.link(cellcoord, *e);
-  });
+  std::for_each(pstl::execution::par, p.begin(), p.end(),
+                per_cell_action);
+#else
+  // Might be able to do better if we run rows in parallel but sequentially
+  // columns for data locality .
+  auto r = ranges::views::iota(static_cast<size_t>(0),
+                               static_cast<size_t>(grid.height_));
+  std::for_each(pstl::execution::par_unseq, r.begin(), r.end(),
+                [&per_cell_action, width=grid.width_](const auto &row) {
+                  for (size_t col = 0; col < width; col++) {
+                    per_cell_action(CellCoordinate{row,col});
+                  }
+                });
+#endif
 }
 
 void sidewinder_maze(Grid &grid) {
@@ -269,6 +289,7 @@ void sidewinder_maze(Grid &grid) {
   std::mt19937 gen(rd());
   std::bernoulli_distribution d(0.5);
 
+#if 0
   auto p = grid.positions();
   size_t run_start = 0;
   // This depends on the fact that grid.positions is in row-col order. You
@@ -288,6 +309,27 @@ void sidewinder_maze(Grid &grid) {
       grid.link(cell, *e);
     }
   });
+#else
+  auto r = ranges::views::iota(static_cast<size_t>(0),
+                               static_cast<size_t>(grid.height_));
+  std::for_each(pstl::execution::par_unseq, r.begin(), r.end(),
+                [&grid, &d, &gen](const auto &row) {
+                  size_t run_start = 0;
+                  for (size_t col = 0; col < grid.width_; col++) {
+                    auto e = grid.cell_east({row, col});
+                    auto s = grid.cell_south({row, col});
+                    bool should_close = !e || (s && d(gen));
+                    if (should_close) {
+                      std::uniform_int_distribution<> distrib(run_start, col);
+                      size_t c = static_cast<size_t>(distrib(gen));
+                      grid.link({row, c}, {row + 1, c});
+                      run_start = col + 1;
+                    } else {
+                      grid.link({row, col}, *e);
+                    }
+                  }
+                });
+#endif
 }
 
 void random_walk_Aldous_Broder_maze(Grid &grid) {
@@ -467,18 +509,19 @@ std::vector<CellCoordinate> longest_path_(Grid &grid,
   while (d(step.row, step.col) > 1) {
     path.push_back(step);
     auto neighbors = grid.get_connected_neighbors(step);
-    fmt::print(" traversing path({}) on our way from {} at {} (d:{}), going to "
-               "one of {}, {}\n",
-               path.size(), goal, step, d(step.row, step.col), neighbors,
-               neighbors | ranges::views::transform(
-                               [d](auto n) { return d(n.row, n.col); }));
+    // fmt::print(" traversing path({}) on our way from {} at {} (d:{}), going
+    // to "
+    //            "one of {}, {}\n",
+    //            path.size(), goal, step, d(step.row, step.col), neighbors,
+    //            neighbors | ranges::views::transform(
+    //                            [d](auto n) { return d(n.row, n.col); }));
     step = *ranges::min_element(neighbors, ranges::less{},
                                 [d](auto c) { return d(c.row, c.col); });
     // fmt::print("Next: {} (d:{})\n", step, d(step.row, step.col));
   }
   path.push_back(step);
 
-  fmt::print("  found path: {}", path);
+  // fmt::print("  found path: {}", path);
   std::cout.flush();
 
   // Update distances for rendering
@@ -532,6 +575,9 @@ constexpr auto fmt::formatter<jt::maze::Grid>::parse(ParseContext &ctx) {
 template <typename FormatContext>
 auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
                                             FormatContext &ctx) {
+  if (grid.width_ > 200 / 4) {
+    return fmt::format_to(ctx.out(), "Maze too big for console!");
+  }
   // Draw an initial boundry
   for (int col = 0; col < grid.width_; col++) {
     auto c = h_wall_to_char(jt::maze::Wall::Boundry);
@@ -704,6 +750,8 @@ void draw_maze(
 
 auto gen_maze(jt::maze::Grid &grid) {
   auto method_c = all_methods[method];
+  using std::chrono::high_resolution_clock;
+  auto t1 = high_resolution_clock::now();
   switch (method_c) {
   case 'B':
     binary_tree_maze(grid);
@@ -724,10 +772,14 @@ auto gen_maze(jt::maze::Grid &grid) {
     recursive_backtracking_maze(grid);
     break;
   }
+  auto t2 = high_resolution_clock::now();
+
+  std::chrono::duration<double, std::milli> delta_ms = t2 - t1;
+  fmt::print("Generated maze in {}\n", delta_ms);
   fmt::print("{}\n", grid);
   auto distances =
       dijkstra_distances(grid, {grid.width_ / 2, grid.height_ / 2});
-  fmt::print("D:{}\n", distances);
+  // fmt::print("D:{}\n", distances);
 
   auto p = grid.positions();
   auto dead_ends =
@@ -831,6 +883,7 @@ int main(int argc, char **argv) {
     std::unordered_map<char, float> averages;
     // we run stats instead!
     for (auto m : all_methods) {
+      // if (m != 'B') continue;
       method = method_id_for_char(m);
       std::vector<int> dead_count;
       for (int i = 0; i < 100; i++) {

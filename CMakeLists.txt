@@ -23,8 +23,10 @@ project(
 find_package(fmt REQUIRED)
 find_package(mdspan REQUIRED)
 find_package(range-v3 REQUIRED)
+find_package(tbb REQUIRED)
+find_package(parallelstl CONFIG REQUIRED)
 find_package(SFML REQUIRED system window graphics)
 
 add_executable(${PROJECT_NAME} src/maze.cpp)
-target_link_libraries(${PROJECT_NAME} fmt::fmt-header-only std::mdspan sfml-graphics)
+target_link_libraries(${PROJECT_NAME} fmt::fmt-header-only std::mdspan sfml-graphics TBB::tbb)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
