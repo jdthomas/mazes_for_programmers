@@ -60,7 +60,8 @@ public:
         const_cast<Cell *>(cells_.data()), height_, width_);
   }
 
-  auto &operator()(size_t row, size_t col) const __attribute__((deprecated)) {
+  auto &operator()(size_t row, size_t col) const
+  /*__attribute__((deprecated))*/ {
     auto m = as_mdspan();
     return m(row, col);
   }
@@ -229,6 +230,15 @@ Grid::Grid(size_t width, size_t height)
 
 // TODO: Some meta structure here to hold the grid + distances + name of method
 // + ...
+
+// struct AllTheThings {
+//   Grid grid;
+//   std::string generator_name;
+//   auto disttances;
+//   auto longest_path_len;
+//   auto longest_path;
+//
+// };
 
 }; // namespace jt::maze
 
@@ -577,6 +587,26 @@ void draw_path(const jt::maze::Grid &grid, sf::RenderWindow &window,
       });
 }
 
+
+static char method = 'B';
+std::string method_name(char m) {
+  switch (m) {
+  case 'B':
+    return "BinaryTree";
+  case 'S':
+    return "Sidewinder";
+  case 'R':
+    return "AldousBroder";
+  case 'W':
+    return "Wilson";
+  case 'K':
+    return "HuntAndKill";
+  case 'C':
+    return "RecursiveBacktraking";
+  }
+  return "unknown";
+}
+
 void draw_maze(
     const jt::maze::Grid &grid, sf::RenderWindow &window,
     std::function<sf::Color(const jt::maze::Grid &, int, int)> colorizer,
@@ -585,22 +615,22 @@ void draw_maze(
   const float cell_width = 800.0 / (grid.width_ + 2);
   const float cell_height = 600.0 / (grid.height_ + 2);
   const auto line_color = sf::Color::Green;
+
   // Fill the cells??
-  for (int row = 0; row < grid.height_; row++) {
-    for (int col = 0; col < grid.width_; col++) {
-      float x1 = cell_width * (col + 1);
-      float x2 = cell_width * (col + 2);
+  for (const auto &cell : grid.positions()) {
+    const auto &[row, col] = cell;
+    float x1 = cell_width * (col + 1);
+    float x2 = cell_width * (col + 2);
 
-      float y1 = cell_height * (row + 1);
-      float y2 = cell_height * (row + 2);
+    float y1 = cell_height * (row + 1);
+    float y2 = cell_height * (row + 2);
 
-      // Fill?
-      {
-        sf::RectangleShape cell(sf::Vector2f(cell_width, cell_height));
-        cell.setPosition(x1, y1);
-        cell.setFillColor(colorizer(grid, row, col));
-        window.draw(cell);
-      }
+    // Fill?
+    {
+      sf::RectangleShape cell(sf::Vector2f(cell_width, cell_height));
+      cell.setPosition(x1, y1);
+      cell.setFillColor(colorizer(grid, row, col));
+      window.draw(cell);
     }
   }
 
@@ -628,36 +658,48 @@ void draw_maze(
     window.draw(line, 2, sf::Lines);
   }
   // Draw rest of maze
-  for (int row = 0; row < grid.height_; row++) {
-    for (int col = 0; col < grid.width_; col++) {
-      float x1 = cell_width * (col + 1);
-      float x2 = cell_width * (col + 2);
+  for (const auto &cell : grid.positions()) {
+    const auto &[row, col] = cell;
+    float x1 = cell_width * (col + 1);
+    float x2 = cell_width * (col + 2);
 
-      float y1 = cell_height * (row + 1);
-      float y2 = cell_height * (row + 2);
+    float y1 = cell_height * (row + 1);
+    float y2 = cell_height * (row + 2);
 
-      // Right wall
-      if (grid(row, col).right != jt::maze::Wall::Open) {
-        sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x2, y1), line_color),
-                             sf::Vertex(sf::Vector2f(x2, y2), line_color)};
+    // Right wall
+    if (grid(cell).right != jt::maze::Wall::Open) {
+      sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x2, y1), line_color),
+                           sf::Vertex(sf::Vector2f(x2, y2), line_color)};
 
-        window.draw(line, 2, sf::Lines);
-      }
+      window.draw(line, 2, sf::Lines);
+    }
 
-      // Bottom wall
-      if (grid(row, col).down != jt::maze::Wall::Open) {
-        sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y2), line_color),
-                             sf::Vertex(sf::Vector2f(x2, y2), line_color)};
+    // Bottom wall
+    if (grid(cell).down != jt::maze::Wall::Open) {
+      sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y2), line_color),
+                           sf::Vertex(sf::Vector2f(x2, y2), line_color)};
 
-        window.draw(line, 2, sf::Lines);
-      }
+      window.draw(line, 2, sf::Lines);
     }
   }
 
   draw_path(grid, window, path);
-}
 
-static char method = 'B';
+  // Labels
+  static sf::Font font;
+  static std::once_flag load_font_flag;
+  std::call_once(load_font_flag, []() {
+    if (!font.loadFromFile("/Library/Fonts/Roboto-Thin.ttf")) {
+      throw std::runtime_error("Cannot find font");
+    }
+  });
+  sf::Text text;
+  text.setFont(font);
+  text.setString(method_name(method));
+  text.setCharacterSize(22); // in pixels, not points!
+  text.setFillColor(sf::Color::White);
+  window.draw(text);
+}
 
 auto gen_maze(jt::maze::Grid &grid) {
   if (method == 'B') {
@@ -745,23 +787,6 @@ void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
   }
 }
 
-std::string method_name(char m) {
-  switch (m) {
-  case 'B':
-    return "BinaryTree";
-  case 'S':
-    return "Sidewinder";
-  case 'R':
-    return "AldousBroder";
-  case 'W':
-    return "Wilson";
-  case 'K':
-    return "HuntAndKill";
-  case 'C':
-    return "RecursiveBacktraking";
-  }
-  return "unknown";
-}
 int main(int argc, char **argv) {
 
   if (argc < 3)
