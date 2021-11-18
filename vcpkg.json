@@ -9,6 +9,9 @@
     "parallelstl",
     "range-v3",
     "tbb",
-    "sfml"
+    {
+      "name": "sfml",
+      "platform": "osx"
+    }
   ]
 }

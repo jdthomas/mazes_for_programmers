@@ -9,8 +9,7 @@
 #include <fmt/ranges.h>
 #include <iostream>
 #include <mutex>
-#include <pstl/algorithm>
-#include <pstl/execution>
+#include <optional>
 #include <random>
 #include <range/v3/all.hpp>
 #include <set>
@@ -18,7 +17,7 @@
 #include <vector>
 
 namespace jt::maze {
-  namespace stdex = std::experimental;
+namespace stdex = std::experimental;
 
 // Not sure why ranges::front() is not working for my sampled ranges, but
 // this seems to do the trick.
@@ -226,7 +225,6 @@ public:
 //
 // };
 
-
 void binary_tree_maze_p(Grid &grid);
 void binary_tree_maze(Grid &grid);
 void sidewinder_maze(Grid &grid);
@@ -235,12 +233,13 @@ void random_walk_Aldous_Broder_maze(Grid &grid);
 void random_walk_Wilson_maze(Grid &grid);
 void hunt_and_kill_maze(Grid &grid);
 void recursive_backtracking_maze(Grid &grid);
-std::vector<int> dijkstra_distances(const Grid &grid, CellCoordinate start_cell);
+std::vector<int> dijkstra_distances(const Grid &grid,
+                                    CellCoordinate start_cell);
 std::tuple<CellCoordinate, int> furthest_cell(const Grid &grid,
                                               std::vector<int> &distances);
 std::vector<CellCoordinate> longest_path_(Grid &grid,
                                           std::vector<int> &distances);
-};
+}; // namespace jt::maze
 
 // FIXME
 extern std::array<char, 6> all_methods;
@@ -323,4 +322,3 @@ auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
 
   return fmt::format_to(ctx.out(), "... {} x {}\n", grid.width_, grid.height_);
 }
-
