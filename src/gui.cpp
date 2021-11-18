@@ -23,7 +23,6 @@
 
 namespace stdex = std::experimental;
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // GUI output
 ////////////////////////////////////////////////////////////////////////////////
@@ -148,7 +147,7 @@ void draw_maze(
   text.setFont(font);
   text.setString(method_name(all_methods[method]));
   text.setCharacterSize(22); // in pixels, not points!
-  text.setFillColor(sf::Color::White);
+  text.setFillColor(sf::Color::Yellow);
   window.draw(text);
 }
 
@@ -185,6 +184,7 @@ void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
     // check all the window's events that were triggered since the last
     // iteration of the loop
     sf::Event event;
+    bool need_regen = false;
     while (window.pollEvent(event)) {
       // "close requested" event: we close the window
       switch (event.type) {
@@ -194,26 +194,46 @@ void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
 
       case sf::Event::TextEntered:
         switch (event.text.unicode) {
+        case '-':
+          // width--;
+          need_regen = true;
+          break;
+        case '+':
+          // width++;
+          need_regen = true;
+          break;
+        case '[':
+          // height--;
+          need_regen = true;
+          break;
+        case ']':
+          // height++;
+          need_regen = true;
+          break;
+
         case 'j':
         case 'J':
           method = (method + 1) % all_methods.size();
+          need_regen = true;
           break;
         case 'k':
         case 'K':
           method = (method + all_methods.size() - 1) % all_methods.size();
+          need_regen = true;
           break;
         }
-        regen_maze();
         break;
       case sf::Event::KeyPressed:
         if (event.key.code == sf::Keyboard::Space) {
-          regen_maze();
+          need_regen = true;
         }
         break;
       default:
         break;
       }
     }
+    if (need_regen)
+      regen_maze();
 
     // clear the window with black color
     window.clear(sf::Color::Black);
