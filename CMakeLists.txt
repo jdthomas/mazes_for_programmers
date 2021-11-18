@@ -27,6 +27,14 @@ find_package(tbb REQUIRED)
 find_package(parallelstl CONFIG REQUIRED)
 find_package(SFML REQUIRED system window graphics)
 
-add_executable(${PROJECT_NAME} src/maze.cpp)
-target_link_libraries(${PROJECT_NAME} fmt::fmt-header-only std::mdspan sfml-graphics TBB::tbb)
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+add_library(mazes src/maze.cpp src/maze.h)
+target_link_libraries(mazes PUBLIC fmt::fmt-header-only std::mdspan TBB::tbb)
+target_compile_features(mazes PUBLIC cxx_std_17)
+
+add_executable(mazes_gui src/gui.cpp)
+target_link_libraries(mazes_gui mazes fmt::fmt-header-only std::mdspan sfml-graphics TBB::tbb)
+target_compile_features(mazes_gui PUBLIC cxx_std_17)
+
+
+enable_testing()
+add_subdirectory(tests)
