@@ -38,3 +38,4 @@ target_compile_features(mazes_gui PUBLIC cxx_std_17)
 
 enable_testing()
 add_subdirectory(tests)
+add_subdirectory(benchmarks)

@@ -227,8 +227,10 @@ public:
 // };
 
 
+void binary_tree_maze_p(Grid &grid);
 void binary_tree_maze(Grid &grid);
 void sidewinder_maze(Grid &grid);
+void sidewinder_maze_p(Grid &grid);
 void random_walk_Aldous_Broder_maze(Grid &grid);
 void random_walk_Wilson_maze(Grid &grid);
 void hunt_and_kill_maze(Grid &grid);
