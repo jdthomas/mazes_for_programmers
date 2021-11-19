@@ -87,6 +87,23 @@ BENCHMARK(BM_binary_tree_p)
     ->Range(8, 8 << 10)
     ->Complexity();
 
+static void BM_binary_tree_p2(benchmark::State &state) {
+  const size_t width = state.range(0);
+  const size_t height = state.range(0);
+  jt::maze::Grid grid{width, height};
+  for (auto _ : state) {
+    state.PauseTiming();
+    grid.reset();
+    state.ResumeTiming();
+    binary_tree_maze_p2(grid);
+  }
+  state.SetComplexityN(state.range(0) * state.range(0));
+}
+BENCHMARK(BM_binary_tree_p2)
+    ->RangeMultiplier(2)
+    ->Range(8, 8 << 10)
+    ->Complexity();
+
 static void BM_sidewinder(benchmark::State &state) {
   const size_t width = state.range(0);
   const size_t height = state.range(0);

@@ -62,6 +62,31 @@ void binary_tree_maze_p(Grid &grid) {
   std::for_each(pstl::execution::par, p.begin(), p.end(), per_cell_action);
 }
 
+void binary_tree_maze_p2(Grid &grid) {
+  // Row-wise parallel impl
+
+  std::bernoulli_distribution d(0.5);
+  auto per_cell_action = [&](const auto &cell) {
+    auto go_down = d(grid.gen);
+    auto s = grid.cell_south(cell);
+    auto e = grid.cell_east(cell);
+    if (s && (go_down || !e))
+      grid.link(cell, *s);
+    else if (e)
+      grid.link(cell, *e);
+  };
+
+  auto r = ranges::views::iota(static_cast<size_t>(0),
+                               static_cast<size_t>(grid.height_));
+  std::for_each(pstl::execution::par_unseq, r.begin(), r.end(),
+                [&](const auto &row) {
+                  for (size_t col = 0; col < grid.width_; col++) {
+                    per_cell_action(CellCoordinate{row, col});
+                  }
+                });
+}
+// TODO: There should be a version of binary_tree where we make the down/left decision first then just link them. e.g. no need for condition in the hot loops.
+
 void sidewinder_maze(Grid &grid) {
   std::bernoulli_distribution d(0.5);
 
@@ -307,7 +332,8 @@ bool operator==(const CellCoordinate &a, const CellCoordinate &b) {
   return a.row == b.row && a.col == b.col;
 }
 Grid::Grid(size_t width, size_t height)
-    : width_{width}, height_{height}, cells_{width * height}, rd{}, gen{rd()} {
+    : width_{width}, height_{height}, cells_{width * height},
+      mdspan_{cells_.data(), height_, width_}, rd{}, gen{rd()} {
 
   auto m = as_mdspan();
   for (int row = 0; row < m.extent(0); row++) {

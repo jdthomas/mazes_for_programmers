@@ -46,16 +46,16 @@ private:
     Wall down, right;
   };
   std::vector<Cell> cells_;
+  stdex::mdspan<Cell,
+                stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
+      mdspan_;
 
   std::random_device rd;
 
 public:
   std::mt19937 gen;
-  auto as_mdspan() const {
-    return stdex::mdspan<
-        Cell, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
-        const_cast<Cell *>(cells_.data()), height_, width_);
-  }
+
+  auto as_mdspan() const { return mdspan_; }
 
   auto &operator()(size_t row, size_t col) const
   /*__attribute__((deprecated))*/ {
@@ -225,8 +225,9 @@ public:
 //
 // };
 
-void binary_tree_maze_p(Grid &grid);
 void binary_tree_maze(Grid &grid);
+void binary_tree_maze_p(Grid &grid);
+void binary_tree_maze_p2(Grid &grid);
 void sidewinder_maze(Grid &grid);
 void sidewinder_maze_p(Grid &grid);
 void random_walk_Aldous_Broder_maze(Grid &grid);
