@@ -188,12 +188,21 @@ public:
     }
   }
 
+  bool is_boundry_cell(CellCoordinate c) {
+    return c.row == 0 || c.col == 0 || c.row == height_ - 1 ||
+           c.col == width_ - 1;
+  }
   // Helper to check if a cell has no connections
   bool is_closed_cell(CellCoordinate c) const {
-    auto tmp = get_connected_neighbors_(c);
-    return ranges::accumulate(
-               tmp | ranges::views::transform([](auto o) { return o ? 1 : 0; }),
-               0) == 0;
+    auto m = as_mdspan();
+    return (c.row == 0 || m(c.row - 1, c.col).down != Wall::Open) &&
+           (c.row == height_ - 1 || m(c.row, c.col).down != Wall::Open) &&
+           (c.col == 0 || m(c.row, c.col - 1).right != Wall::Open) &&
+           (c.col == width_ - 1 || m(c.row, c.col).right != Wall::Open);
+    // auto tmp = get_connected_neighbors_(c);
+    // return ranges::accumulate(
+    //            tmp | ranges::views::transform([](auto o) { return o ? 1 : 0;
+    //            }), 0) == 0;
   }
 
   // Helper to check if a cell is a dead end (has only one connecttion)

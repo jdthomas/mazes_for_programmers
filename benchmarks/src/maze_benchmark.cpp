@@ -194,7 +194,7 @@ static void BM_recursive_backtracking(benchmark::State &state) {
 }
 BENCHMARK(BM_recursive_backtracking)
     ->RangeMultiplier(2)
-    ->Range(8, 8 << 4)
+    ->Range(8, 8 << 6)
     ->Complexity();
 
 BENCHMARK_MAIN();
