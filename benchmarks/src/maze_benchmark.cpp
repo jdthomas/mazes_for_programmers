@@ -8,6 +8,54 @@
 
 namespace {}; // namespace
 
+static void BM_minstd_rand0(benchmark::State &state) {
+  std::random_device rd;
+  std::minstd_rand0 gen;
+  std::uniform_int_distribution<> distrib(0, 60'000'000);
+
+  int x;
+  for (auto _ : state) {
+    benchmark::DoNotOptimize(x = distrib(gen));
+  }
+}
+BENCHMARK(BM_minstd_rand0);
+
+static void BM_minstd_rand(benchmark::State &state) {
+  std::random_device rd;
+  std::minstd_rand gen;
+  std::uniform_int_distribution<> distrib(0, 60'000'000);
+
+  int x;
+  for (auto _ : state) {
+    benchmark::DoNotOptimize(x = distrib(gen));
+  }
+}
+BENCHMARK(BM_minstd_rand);
+
+static void BM_mt19937(benchmark::State &state) {
+  std::random_device rd;
+  std::mt19937 gen;
+  std::uniform_int_distribution<> distrib(0, 60'000'000);
+
+  int x;
+  for (auto _ : state) {
+    benchmark::DoNotOptimize(x = distrib(gen));
+  }
+}
+BENCHMARK(BM_mt19937);
+
+static void BM_ranlux24(benchmark::State &state) {
+  std::random_device rd;
+  std::ranlux24 gen;
+  std::uniform_int_distribution<> distrib(0, 60'000'000);
+
+  int x;
+  for (auto _ : state) {
+    benchmark::DoNotOptimize(x = distrib(gen));
+  }
+}
+BENCHMARK(BM_ranlux24);
+
 static void BM_binary_tree(benchmark::State &state) {
   const size_t width = state.range(0);
   const size_t height = state.range(0);

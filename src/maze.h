@@ -48,9 +48,9 @@ private:
   std::vector<Cell> cells_;
 
   std::random_device rd;
-  std::mt19937 gen;
 
 public:
+  std::mt19937 gen;
   auto as_mdspan() const {
     return stdex::mdspan<
         Cell, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
@@ -165,12 +165,12 @@ public:
   void link(CellCoordinate c1, CellCoordinate c2) {
     auto &[row_1, col_1] = c1;
     auto &[row_2, col_2] = c2;
-    long dx = col_2 - col_1;
-    long dy = row_2 - row_1;
+    ssize_t dx = col_2 - col_1;
+    ssize_t dy = row_2 - row_1;
     // fmt::print("linking: {} to {} delta: {}.{}\n", c1, c2, dx, dy);
-    if (std::abs(dx) > 1 || std::abs(dy) > 1 ||
-        (std::abs(dx) > 0 && std::abs(dy) > 0))
-      throw std::runtime_error("Linking cells must be neighbors");
+    // if (std::abs(dx) > 1 || std::abs(dy) > 1 ||
+    //     (std::abs(dx) > 0 && std::abs(dy) > 0))
+    //   throw std::runtime_error("Linking cells must be neighbors");
 
     auto m = as_mdspan();
     if (dx == -1) {

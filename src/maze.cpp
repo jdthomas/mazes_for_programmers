@@ -29,12 +29,10 @@ namespace stdex = std::experimental;
 namespace jt::maze {
 
 void binary_tree_maze(Grid &grid) {
-  std::random_device rd;
-  std::ranlux24_base gen(rd());
   std::bernoulli_distribution d(0.5);
 
   auto per_cell_action = [&](const auto &cell) {
-    auto go_down = d(gen);
+    auto go_down = d(grid.gen);
     auto s = grid.cell_south(cell);
     auto e = grid.cell_east(cell);
     if (s && (go_down || !e))
@@ -49,11 +47,9 @@ void binary_tree_maze(Grid &grid) {
 
 void binary_tree_maze_p(Grid &grid) {
 
-  std::random_device rd;
-  std::ranlux24_base gen(rd());
   std::bernoulli_distribution d(0.5);
   auto per_cell_action = [&](const auto &cell) {
-    auto go_down = d(gen);
+    auto go_down = d(grid.gen);
     auto s = grid.cell_south(cell);
     auto e = grid.cell_east(cell);
     if (s && (go_down || !e))
@@ -67,23 +63,22 @@ void binary_tree_maze_p(Grid &grid) {
 }
 
 void sidewinder_maze(Grid &grid) {
-  std::random_device rd;
-  std::ranlux24_base gen(rd());
   std::bernoulli_distribution d(0.5);
 
   auto r = ranges::views::iota(static_cast<size_t>(0),
                                static_cast<size_t>(grid.height_));
-  std::for_each(r.begin(), r.end(), [&grid, &d, &gen](const auto &row) {
+  std::for_each(r.begin(), r.end(), [&grid, &d](const auto &row) {
     size_t run_start = 0;
     for (size_t col = 0; col < grid.width_; col++) {
       auto e = grid.cell_east({row, col});
       auto s = grid.cell_south({row, col});
-      bool should_close = !e || (s && d(gen));
+      bool should_close = !e || (s && d(grid.gen));
       if (should_close) {
         std::uniform_int_distribution<> distrib(run_start, col);
-        size_t c = static_cast<size_t>(distrib(gen));
+        size_t c = static_cast<size_t>(distrib(grid.gen));
         grid.link({row, c}, {row + 1, c});
         run_start = col + 1;
+        c = run_start;
       } else {
         grid.link({row, col}, *e);
       }
@@ -92,22 +87,20 @@ void sidewinder_maze(Grid &grid) {
 }
 
 void sidewinder_maze_p(Grid &grid) {
-  std::random_device rd;
-  std::ranlux24_base gen(rd());
   std::bernoulli_distribution d(0.5);
 
   auto r = ranges::views::iota(static_cast<size_t>(0),
                                static_cast<size_t>(grid.height_));
   std::for_each(pstl::execution::par_unseq, r.begin(), r.end(),
-                [&grid, &d, &gen](const auto &row) {
+                [&grid, &d](const auto &row) {
                   size_t run_start = 0;
                   for (size_t col = 0; col < grid.width_; col++) {
                     auto e = grid.cell_east({row, col});
                     auto s = grid.cell_south({row, col});
-                    bool should_close = !e || (s && d(gen));
+                    bool should_close = !e || (s && d(grid.gen));
                     if (should_close) {
                       std::uniform_int_distribution<> distrib(run_start, col);
-                      size_t c = static_cast<size_t>(distrib(gen));
+                      size_t c = static_cast<size_t>(distrib(grid.gen));
                       grid.link({row, c}, {row + 1, c});
                       run_start = col + 1;
                     } else {
@@ -133,16 +126,13 @@ void random_walk_Aldous_Broder_maze(Grid &grid) {
 }
 
 void random_walk_Wilson_maze(Grid &grid) {
-  std::random_device rd;
-  std::ranlux24_base gen(rd());
-
   auto unvisited = grid.positions() | ranges::to<std::set>;
   auto first = grid.random_cell();
   unvisited.erase(first);
 
   while (unvisited.size() > 0) {
     // fmt::print("unvisited: {}\n", unvisited.size());
-    auto cell = *jt_range_front(unvisited | ranges::views::sample(1, gen));
+    auto cell = *jt_range_front(unvisited | ranges::views::sample(1, grid.gen));
     // fmt::print("cell: {} dis={}\n", cell,
     // std::distance(std::begin(unvisited), cell_i));
     assert(unvisited.find(cell) != ranges::end(unvisited));
