@@ -264,7 +264,7 @@ public:
     }
   };
 
-  static const std::vector<const RegistryConfig> &AllMethods() {
+  static const std::vector<RegistryConfig> &AllMethods() {
     return registry_;
   }
 
@@ -290,7 +290,7 @@ public:
   static size_t GetMazeGeneratorCount() { return registry_.size(); };
 
 private:
-  static std::vector<const RegistryConfig> registry_;
+  static std::vector<RegistryConfig> registry_;
 };
 
 void ensure_registry();

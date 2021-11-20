@@ -9,8 +9,13 @@
 #include <fmt/ranges.h>
 #include <iostream>
 #include <mutex>
+#if defined(__GLIBCXX__)
+#include <execution>
+namespace pstl = std;
+#else
 #include <pstl/algorithm>
 #include <pstl/execution>
+#endif
 #include <random>
 #include <range/v3/all.hpp>
 #include <set>

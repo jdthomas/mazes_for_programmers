@@ -25,20 +25,24 @@ find_package(mdspan REQUIRED)
 find_package(range-v3 REQUIRED)
 find_package(TBB REQUIRED)
 find_package(ParallelSTL CONFIG REQUIRED)
+find_package(Threads REQUIRED)
+
+
+
 
 add_library(mazes src/maze.cpp src/maze_generators.cpp src/maze.h)
-target_link_libraries(mazes PUBLIC fmt::fmt-header-only std::mdspan TBB::tbb)
+target_link_libraries(mazes PUBLIC fmt::fmt-header-only std::mdspan TBB::tbb ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(mazes PUBLIC cxx_std_17)
 
 add_executable(mazes_stats src/stats.cpp)
-target_link_libraries(mazes_stats mazes fmt::fmt-header-only std::mdspan TBB::tbb)
+target_link_libraries(mazes_stats mazes fmt::fmt-header-only std::mdspan TBB::tbb ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(mazes_stats PUBLIC cxx_std_17)
 
 if (APPLE)
 find_package(SFML COMPONENTS system window graphics)
 if (SFML_FOUND)
   add_executable(mazes_gui src/gui.cpp)
-  target_link_libraries(mazes_gui mazes fmt::fmt-header-only std::mdspan sfml-graphics TBB::tbb)
+  target_link_libraries(mazes_gui mazes fmt::fmt-header-only std::mdspan sfml-graphics TBB::tbb ${CMAKE_THREAD_LIBS_INIT})
   target_compile_features(mazes_gui PUBLIC cxx_std_17)
 endif ()
 endif ()
