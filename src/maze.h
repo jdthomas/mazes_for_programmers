@@ -253,30 +253,57 @@ std::vector<CellCoordinate> longest_path_(Grid &grid,
 class GeneratorRegistry {
 public:
   struct RegistryConfig {
-    RegistryConfig(char sn, std::string n, std::function<void(Grid &)> f)
-        : short_name(sn), name(std::move(n)), generate(f) {
-      GeneratorRegistry::registry_.push_back(this);
-    }
+    // RegistryConfig(RegistryConfig const &) = delete;
+    // RegistryConfig(RegistryConfig&&) = delete;
+    explicit RegistryConfig(char sn, std::string n,
+                            std::function<void(Grid &)> f)
+        : short_name(sn), name(std::move(n)), generate(f) {}
     char short_name;
     std::string name;
     std::function<void(Grid &)> generate;
   };
 
-  // static RegistryConfig &GetMazeGeneratorByShortName();
+  // Silly empty struct who's constructor adds us to the global registry
+  struct RegisterGenerator {
+    RegisterGenerator(char sn, std::string n, std::function<void(Grid &)> f) {
+      // Ensure that sn is not already in the registry??
+      fmt::print("Registering {}\n", n);
+      GeneratorRegistry::registry_.emplace_back(sn, std::move(n), f);
+    }
+  };
+
+  static const std::vector<const RegistryConfig> &AllMethods() {
+    return registry_;
+  }
+
+  static const RegistryConfig &GetMazeGeneratorByShortName(char sn) {
+    auto m = std::find_if(registry_.begin(), registry_.end(),
+                          [sn](const auto &x) { return x.short_name == sn; });
+    if (m == registry_.end()) {
+      throw std::runtime_error("Method not found");
+    }
+    return *m;
+  }
+
+  static size_t GetMazeGeneratorIndexByShortName(char sn) {
+    auto m = std::find_if(registry_.begin(), registry_.end(),
+                          [sn](const auto &x) { return x.short_name == sn; });
+    return std::distance(registry_.begin(), m);
+  }
+
   // static RegistryConfig &GetMazeGeneratorByName();
+  static const RegistryConfig &GetMazeGeneratorByIndex(size_t idx) {
+    return registry_[idx];
+  }
+  static size_t GetMazeGeneratorCount() { return registry_.size(); };
 
 private:
-  static std::vector<RegistryConfig *> registry_;
+  static std::vector<const RegistryConfig> registry_;
 };
 
+void ensure_registry();
 }; // namespace jt::maze
 
-// FIXME
-extern std::array<char, 6> all_methods;
-extern size_t method;
-std::string method_name(char m);
-std::vector<int> gen_maze(jt::maze::Grid &grid);
-// Generator registry
 ////////////////////////////////////////////////////////////////////////////////
 // Ascii output
 ////////////////////////////////////////////////////////////////////////////////

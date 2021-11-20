@@ -25,20 +25,15 @@ int main(int argc, char **argv) {
     return 1;
   jt::maze::Grid grid{static_cast<size_t>(std::strtol(argv[1], nullptr, 10)),
                       static_cast<size_t>(std::strtol(argv[2], nullptr, 10))};
-  std::unordered_map<char, float> averages;
+  std::unordered_map<std::string, float> averages;
+  jt::maze::ensure_registry();
   // we run stats instead!
-  auto method_id_for_char = [](auto m) {
-    return std::distance(
-                         std::begin(all_methods),
-                         std::find(std::begin(all_methods), std::end(all_methods), m));
-  };
-  for (auto m : all_methods) {
-    // if (m != 'B') continue;
-    method = method_id_for_char(m);
+  for (auto &m : jt::maze::GeneratorRegistry::AllMethods()) {
+
     std::vector<int> dead_count;
     for (int i = 0; i < 100; i++) {
       grid.reset();
-      gen_maze(grid);
+      m.generate(grid);
       auto p = grid.positions();
       auto dead_ends =
           ranges::accumulate(p | ranges::views::transform([&grid](auto pos) {
@@ -47,16 +42,21 @@ int main(int argc, char **argv) {
                              0);
       dead_count.push_back(dead_ends);
     }
-    averages[m] = float(ranges::accumulate(dead_count, 0)) / dead_count.size();
+    averages[m.name] =
+        float(ranges::accumulate(dead_count, 0)) / dead_count.size();
   }
   auto cell_count = grid.width_ * grid.height_;
   fmt::print("Average dead-ends per {}x#{} maze ({} cells):\n", grid.width_,
              grid.height_, cell_count);
-  for (auto kv : averages) {
+
+  std::vector<std::pair<std::string, float>> sorted_avgs;
+  std::copy(averages.begin(), averages.end(), std::back_inserter(sorted_avgs));
+
+  std::sort(sorted_avgs.begin(), sorted_avgs.end(),
+            [](const auto &a, const auto &b) { return a.second < b.second; });
+  for (auto &kv : sorted_avgs) {
     auto &[k, v] = kv;
-    fmt::print("{}: {}/{} ({}%)\n", method_name(k), v, cell_count,
-               100 * v / cell_count);
-    // AldousBroder : 115/400 (28%)
+    fmt::print("    {}: {}/{} ({}%)\n", k, v, cell_count, 100 * v / cell_count);
   }
   return 0;
 }

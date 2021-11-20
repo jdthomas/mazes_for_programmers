@@ -22,12 +22,13 @@
 #include "maze.h"
 
 namespace stdex = std::experimental;
+using namespace jt::maze;
 
 ////////////////////////////////////////////////////////////////////////////////
 // GUI output
 ////////////////////////////////////////////////////////////////////////////////
-void draw_path(const jt::maze::Grid &grid, sf::RenderWindow &window,
-               std::vector<jt::maze::CellCoordinate> &path) {
+void draw_path(const Grid &grid, sf::RenderWindow &window,
+               std::vector<CellCoordinate> &path) {
   const float cell_width = 800.0 / (grid.width_ + 2);
   const float cell_height = 600.0 / (grid.height_ + 2);
   const auto line_color = sf::Color::Red;
@@ -57,10 +58,9 @@ void draw_path(const jt::maze::Grid &grid, sf::RenderWindow &window,
       });
 }
 
-void draw_maze(
-    const jt::maze::Grid &grid, sf::RenderWindow &window,
-    std::function<sf::Color(const jt::maze::Grid &, int, int)> colorizer,
-    std::vector<jt::maze::CellCoordinate> &path) {
+void draw_maze(const Grid &grid, sf::RenderWindow &window,
+               std::function<sf::Color(const Grid &, int, int)> colorizer,
+               std::vector<CellCoordinate> &path, std::string gen_name) {
   auto window_size = window.getSize();
   const float cell_width = 800.0 / (grid.width_ + 2);
   const float cell_height = 600.0 / (grid.height_ + 2);
@@ -117,7 +117,7 @@ void draw_maze(
     float y2 = cell_height * (row + 2);
 
     // Right wall
-    if (grid(cell).right != jt::maze::Wall::Open) {
+    if (grid(cell).right != Wall::Open) {
       sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x2, y1), line_color),
                            sf::Vertex(sf::Vector2f(x2, y2), line_color)};
 
@@ -125,7 +125,7 @@ void draw_maze(
     }
 
     // Bottom wall
-    if (grid(cell).down != jt::maze::Wall::Open) {
+    if (grid(cell).down != Wall::Open) {
       sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y2), line_color),
                            sf::Vertex(sf::Vector2f(x2, y2), line_color)};
 
@@ -145,20 +145,51 @@ void draw_maze(
   });
   sf::Text text;
   text.setFont(font);
-  text.setString(method_name(all_methods[method]));
+  text.setString(gen_name);
   text.setCharacterSize(22); // in pixels, not points!
   text.setFillColor(sf::Color::Yellow);
   window.draw(text);
 }
 
-void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
-              std::vector<jt::maze::CellCoordinate> path) {
+void gui_main(size_t width, size_t height, size_t method_idx) {
+  Grid grid{width, height};
+
+  const auto &method_ = GeneratorRegistry::GetMazeGeneratorByIndex(method_idx);
+  std::string method_name = method_.name;
+
+  using std::chrono::high_resolution_clock;
+  auto t1 = high_resolution_clock::now();
+
+  method_.generate(grid);
+
+  auto t2 = high_resolution_clock::now();
+
+  auto distances =
+      dijkstra_distances(grid, {grid.width_ / 2, grid.height_ / 2});
+  auto path = longest_path_(grid, distances);
+
+  auto t3 = high_resolution_clock::now();
+
+  std::chrono::duration<double, std::milli> gen_delta_ms = t2 - t1;
+  fmt::print("Generated maze in {}\n", gen_delta_ms);
+
+  std::chrono::duration<double, std::milli> path_delta_ms = t3 - t2;
+  fmt::print("Compute longest path maze with dijkstra in {}\n", path_delta_ms);
+  fmt::print("{}\n", grid);
+
+  auto p = grid.positions();
+  auto dead_ends =
+      ranges::accumulate(p | ranges::views::transform([&grid](auto pos) {
+                           return grid.is_dead_end_cell(pos) ? 1 : 0;
+                         }),
+                         0);
+  fmt::print("Dead ends: {}\n", dead_ends);
 
   auto d = stdex::mdspan<
       int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
       distances.data(), grid.height_, grid.width_);
   auto max_path_len = *std::max_element(distances.begin(), distances.end());
-  std::function<sf::Color(const jt::maze::Grid &, int, int)> colorizer =
+  std::function<sf::Color(const Grid &, int, int)> colorizer =
       [&max_path_len, &d](auto &g, auto c, auto r) {
         int shade = 255 * d(c, r) / max_path_len;
         return sf::Color(shade, shade, shade);
@@ -170,7 +201,10 @@ void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
   auto regen_maze = [&]() {
     fmt::print("Regenerating maze!\n");
     grid.reset();
-    distances = gen_maze(grid);
+    const auto &method = GeneratorRegistry::GetMazeGeneratorByIndex(method_idx);
+    method_name = method.name;
+    method.generate(grid);
+    distances = dijkstra_distances(grid, {grid.width_ / 2, grid.height_ / 2});
 
     path = longest_path_(grid, distances);
     d = stdex::mdspan<
@@ -213,12 +247,15 @@ void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
 
         case 'j':
         case 'J':
-          method = (method + 1) % all_methods.size();
+          method_idx =
+              (method_idx + 1) % GeneratorRegistry::GetMazeGeneratorCount();
           need_regen = true;
           break;
         case 'k':
         case 'K':
-          method = (method + all_methods.size() - 1) % all_methods.size();
+          method_idx =
+              (method_idx + GeneratorRegistry::GetMazeGeneratorCount() - 1) %
+              GeneratorRegistry::GetMazeGeneratorCount();
           need_regen = true;
           break;
         }
@@ -239,7 +276,7 @@ void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
     window.clear(sf::Color::Black);
 
     // draw everything here...
-    draw_maze(grid, window, colorizer, path);
+    draw_maze(grid, window, colorizer, path, method_name);
 
     // end the current frame
     window.display();
@@ -247,22 +284,18 @@ void gui_main(jt::maze::Grid &grid, std::vector<int> distances,
 }
 
 int main(int argc, char **argv) {
-
   if (argc < 3)
     return 1;
-  jt::maze::Grid grid{static_cast<size_t>(std::strtol(argv[1], nullptr, 10)),
-                      static_cast<size_t>(std::strtol(argv[2], nullptr, 10))};
-  auto method_id_for_char = [](auto m) {
-    return std::distance(
-        std::begin(all_methods),
-        std::find(std::begin(all_methods), std::end(all_methods), m));
-  };
-  method = method_id_for_char(argv[3][0]);
 
-  auto distances = gen_maze(grid);
+  size_t width = static_cast<size_t>(std::strtol(argv[1], nullptr, 10));
+  size_t height = static_cast<size_t>(std::strtol(argv[2], nullptr, 10));
+  size_t method_idx =
+      GeneratorRegistry::GetMazeGeneratorIndexByShortName(argv[3][0]);
 
-  auto path = longest_path_(grid, distances);
+  auto &m = GeneratorRegistry::AllMethods();
+  jt::maze::ensure_registry();
 
-  gui_main(grid, distances, path);
+  gui_main(width, height, method_idx);
+
   return 0;
 }

@@ -24,11 +24,11 @@ namespace pstl = std;
 
 #include "maze.h"
 
-
 namespace jt::maze {
-  //////////////////////////////////////////////////////////////////////////////
-  // Binary Tree
-  //////////////////////////////////////////////////////////////////////////////
+void ensure_registry() {}
+//////////////////////////////////////////////////////////////////////////////
+// Binary Tree
+//////////////////////////////////////////////////////////////////////////////
 void binary_tree_maze(Grid &grid) {
   std::bernoulli_distribution d(0.5);
 
@@ -45,7 +45,7 @@ void binary_tree_maze(Grid &grid) {
   auto p = grid.positions();
   std::for_each(p.begin(), p.end(), per_cell_action);
 }
-GeneratorRegistry::RegistryConfig bt{'B',"BinaryTree", binary_tree_maze};
+GeneratorRegistry::RegisterGenerator b('B', "BinaryTree", binary_tree_maze);
 
 void binary_tree_maze_p(Grid &grid) {
 
@@ -63,7 +63,8 @@ void binary_tree_maze_p(Grid &grid) {
   auto p = grid.positions();
   std::for_each(pstl::execution::par, p.begin(), p.end(), per_cell_action);
 }
-GeneratorRegistry::RegistryConfig bt2{'b',"BinaryTree(Parallel - 1)", binary_tree_maze_p};
+GeneratorRegistry::RegisterGenerator b2('b', "BinaryTree(Parallel - 1)",
+                                        binary_tree_maze_p);
 
 void binary_tree_maze_p2(Grid &grid) {
   // Row-wise parallel impl
@@ -88,13 +89,16 @@ void binary_tree_maze_p2(Grid &grid) {
                   }
                 });
 }
-GeneratorRegistry::RegistryConfig bt3{'D',"BinaryTree(Parallel - 2)", binary_tree_maze_p2};
+GeneratorRegistry::RegisterGenerator b3('D', "BinaryTree(Parallel - 2)",
+                                        binary_tree_maze_p2);
 
-// TODO: There should be a version of binary_tree where we make the down/left decision first then just link them. e.g. no need for condition in the hot loops.
+// TODO: There should be a version of binary_tree where we make the down/left
+// decision first then just link them. e.g. no need for condition in the hot
+// loops.
 
-  //////////////////////////////////////////////////////////////////////////////
-  // Sidewinder
-  //////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+// Sidewinder
+//////////////////////////////////////////////////////////////////////////////
 void sidewinder_maze(Grid &grid) {
   std::bernoulli_distribution d(0.5);
 
@@ -118,7 +122,7 @@ void sidewinder_maze(Grid &grid) {
     }
   });
 }
-GeneratorRegistry::RegistryConfig sw{'S',"Sidewinder", sidewinder_maze};
+GeneratorRegistry::RegisterGenerator s('S', "Sidewinder", sidewinder_maze);
 
 void sidewinder_maze_p(Grid &grid) {
   std::bernoulli_distribution d(0.5);
@@ -143,11 +147,12 @@ void sidewinder_maze_p(Grid &grid) {
                   }
                 });
 }
-GeneratorRegistry::RegistryConfig sw2{'s',"Sidewinder(Parallel - 1)", sidewinder_maze_p};
+GeneratorRegistry::RegisterGenerator s2('s', "Sidewinder(Parallel - 1)",
+                                        sidewinder_maze_p);
 
-  //////////////////////////////////////////////////////////////////////////////
-  // Random Walks
-  //////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+// Random Walks
+//////////////////////////////////////////////////////////////////////////////
 void random_walk_Aldous_Broder_maze(Grid &grid) {
   auto cell = grid.random_cell();
   int unvisited = grid.width_ * grid.height_ - 1;
@@ -162,7 +167,8 @@ void random_walk_Aldous_Broder_maze(Grid &grid) {
     }
   }
 }
-GeneratorRegistry::RegistryConfig ab{'A',"AldousBroder", random_walk_Aldous_Broder_maze};
+GeneratorRegistry::RegisterGenerator ab('A', "AldousBroder",
+                                        random_walk_Aldous_Broder_maze);
 
 void random_walk_Wilson_maze(Grid &grid) {
   auto unvisited = grid.positions() | ranges::to<std::set>;
@@ -205,7 +211,7 @@ void random_walk_Wilson_maze(Grid &grid) {
     ranges::for_each(path, [&unvisited](auto a) { unvisited.erase(a); });
   }
 }
-GeneratorRegistry::RegistryConfig w{'W',"Wilson", random_walk_Wilson_maze};
+GeneratorRegistry::RegisterGenerator w('W', "Wilson", random_walk_Wilson_maze);
 
 void hunt_and_kill_maze(Grid &grid) {
   std::optional<CellCoordinate> current = grid.random_cell();
@@ -232,7 +238,7 @@ void hunt_and_kill_maze(Grid &grid) {
     }
   }
 }
-GeneratorRegistry::RegistryConfig hk{'K',"HuntAndKill", hunt_and_kill_maze};
+GeneratorRegistry::RegisterGenerator k('K', "HuntAndKill", hunt_and_kill_maze);
 
 void recursive_backtracking_maze(Grid &grid) {
   std::vector<CellCoordinate> stack{grid.random_cell()};
@@ -249,73 +255,8 @@ void recursive_backtracking_maze(Grid &grid) {
     }
   }
 }
-GeneratorRegistry::RegistryConfig rb{'R',"RecursiveBacktracking", recursive_backtracking_maze};
+GeneratorRegistry::RegisterGenerator r('R', "RecursiveBacktracking",
+                                       recursive_backtracking_maze);
 
-
-};
-
-size_t method = 0;
-std::array<char, 6> all_methods{'B', 'S', 'R', 'W', 'K', 'C'};
-std::string method_name(char m) {
-  switch (m) {
-  case 'B':
-    return "BinaryTree";
-  case 'S':
-    return "Sidewinder";
-  case 'R':
-    return "AldousBroder";
-  case 'W':
-    return "Wilson";
-  case 'K':
-    return "HuntAndKill";
-  case 'C':
-    return "RecursiveBacktraking";
-  }
-  return "unknown";
-}
-
-std::vector<int> gen_maze(jt::maze::Grid &grid) {
-  fmt::print("Generating maze by {}\n", method_name(all_methods[method]));
-  auto method_c = all_methods[method];
-  using std::chrono::high_resolution_clock;
-  auto t1 = high_resolution_clock::now();
-  switch (method_c) {
-  case 'B':
-    binary_tree_maze(grid);
-    break;
-  case 'S':
-    sidewinder_maze(grid);
-    break;
-  case 'R':
-    random_walk_Aldous_Broder_maze(grid);
-    break;
-  case 'W':
-    random_walk_Wilson_maze(grid);
-    break;
-  case 'K':
-    hunt_and_kill_maze(grid);
-    break;
-  case 'C':
-    recursive_backtracking_maze(grid);
-    break;
-  }
-  auto t2 = high_resolution_clock::now();
-
-  std::chrono::duration<double, std::milli> delta_ms = t2 - t1;
-  fmt::print("Generated maze in {}\n", delta_ms);
-  fmt::print("{}\n", grid);
-  auto distances =
-      dijkstra_distances(grid, {grid.width_ / 2, grid.height_ / 2});
-  // fmt::print("D:{}\n", distances);
-
-  auto p = grid.positions();
-  auto dead_ends =
-      ranges::accumulate(p | ranges::views::transform([&grid](auto pos) {
-                           return grid.is_dead_end_cell(pos) ? 1 : 0;
-                         }),
-                         0);
-  fmt::print("Dead ends: {}\n", dead_ends);
-
-  return distances;
-}
+}; // namespace jt::maze
 

@@ -138,7 +138,7 @@ Grid::Grid(size_t width, size_t height)
   }
 };
 
-std::vector<GeneratorRegistry::RegistryConfig*> GeneratorRegistry::registry_{};
+std::vector<const GeneratorRegistry::RegistryConfig>
+    GeneratorRegistry::registry_{};
 
 }; // namespace jt::maze
-
