@@ -222,17 +222,6 @@ public:
   }
 };
 
-// TODO: Some meta structure here to hold the grid + distances + name of method
-// + ...
-
-// struct AllTheThings {
-//   Grid grid;
-//   std::string generator_name;
-//   auto disttances;
-//   auto longest_path_len;
-//   auto longest_path;
-//
-// };
 
 void binary_tree_maze(Grid &grid);
 void binary_tree_maze_p(Grid &grid);
@@ -243,10 +232,13 @@ void random_walk_Aldous_Broder_maze(Grid &grid);
 void random_walk_Wilson_maze(Grid &grid);
 void hunt_and_kill_maze(Grid &grid);
 void recursive_backtracking_maze(Grid &grid);
+
 std::vector<int> dijkstra_distances(const Grid &grid,
                                     CellCoordinate start_cell);
+
 std::tuple<CellCoordinate, int> furthest_cell(const Grid &grid,
                                               std::vector<int> &distances);
+
 std::vector<CellCoordinate> longest_path_(Grid &grid,
                                           std::vector<int> &distances);
 

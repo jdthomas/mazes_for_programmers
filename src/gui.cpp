@@ -28,7 +28,7 @@ using namespace jt::maze;
 // GUI output
 ////////////////////////////////////////////////////////////////////////////////
 void draw_path(const Grid &grid, sf::RenderWindow &window,
-               std::vector<CellCoordinate> &path) {
+               const std::vector<CellCoordinate> &path) {
   const float cell_width = 800.0 / (grid.width_ + 2);
   const float cell_height = 600.0 / (grid.height_ + 2);
   const auto line_color = sf::Color::Red;
@@ -58,9 +58,56 @@ void draw_path(const Grid &grid, sf::RenderWindow &window,
       });
 }
 
-void draw_maze(const Grid &grid, sf::RenderWindow &window,
-               std::function<sf::Color(const Grid &, int, int)> colorizer,
-               std::vector<CellCoordinate> &path, std::string gen_name) {
+struct DrawableMaze {
+  DrawableMaze(size_t width, size_t height,
+               const GeneratorRegistry::RegistryConfig &method)
+      : grid{width, height} {
+    using std::chrono::high_resolution_clock;
+    auto t1 = high_resolution_clock::now();
+    method.generate(grid);
+    auto t2 = high_resolution_clock::now();
+
+    distances = dijkstra_distances(grid, {grid.width_ / 2, grid.height_ / 2});
+    path = longest_path_(grid, distances);
+    method_name = method.name;
+
+    auto t3 = high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> gen_delta_ms = t2 - t1;
+    fmt::print("Generated maze in {}\n", gen_delta_ms);
+
+    std::chrono::duration<double, std::milli> path_delta_ms = t3 - t2;
+    fmt::print("Compute longest path maze with dijkstra in {}\n",
+               path_delta_ms);
+
+    max_path_len = *std::max_element(distances.begin(), distances.end());
+
+    colorizer = [this](auto &g, auto c, auto r) {
+      auto d = stdex::mdspan<
+          int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
+          this->distances.data(), this->grid.height_, this->grid.width_);
+      int shade = 255 * d(c, r) / this->max_path_len;
+      return sf::Color(shade, shade, shade);
+    };
+
+    // Just some stats
+    auto p = grid.positions();
+    auto dead_ends =
+        ranges::accumulate(p | ranges::views::transform([this](auto pos) {
+                             return this->grid.is_dead_end_cell(pos) ? 1 : 0;
+                           }),
+                           0);
+    fmt::print("Dead ends: {}\n", dead_ends);
+  }
+  Grid grid;
+  std::vector<int> distances;
+  std::vector<CellCoordinate> path;
+  std::string method_name;
+  size_t max_path_len;
+  std::function<sf::Color(const Grid &, int, int)> colorizer; // FIXME
+};
+
+void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
+  auto &[grid, distances, path, gen_name, max_path_len, colorizer] = dmaze;
   auto window_size = window.getSize();
   const float cell_width = 800.0 / (grid.width_ + 2);
   const float cell_height = 600.0 / (grid.height_ + 2);
@@ -152,66 +199,16 @@ void draw_maze(const Grid &grid, sf::RenderWindow &window,
 }
 
 void gui_main(size_t width, size_t height, size_t method_idx) {
-  Grid grid{width, height};
+  std::unique_ptr<DrawableMaze> dmaze;
+  auto regen_maze = [&dmaze, &method_idx, &width, &height]() {
+    const auto &method = GeneratorRegistry::GetMazeGeneratorByIndex(method_idx);
+    dmaze = std::make_unique<DrawableMaze>(width, height, method);
+  };
 
-  const auto &method_ = GeneratorRegistry::GetMazeGeneratorByIndex(method_idx);
-  std::string method_name = method_.name;
-
-  using std::chrono::high_resolution_clock;
-  auto t1 = high_resolution_clock::now();
-
-  method_.generate(grid);
-
-  auto t2 = high_resolution_clock::now();
-
-  auto distances =
-      dijkstra_distances(grid, {grid.width_ / 2, grid.height_ / 2});
-  auto path = longest_path_(grid, distances);
-
-  auto t3 = high_resolution_clock::now();
-
-  std::chrono::duration<double, std::milli> gen_delta_ms = t2 - t1;
-  fmt::print("Generated maze in {}\n", gen_delta_ms);
-
-  std::chrono::duration<double, std::milli> path_delta_ms = t3 - t2;
-  fmt::print("Compute longest path maze with dijkstra in {}\n", path_delta_ms);
-  fmt::print("{}\n", grid);
-
-  auto p = grid.positions();
-  auto dead_ends =
-      ranges::accumulate(p | ranges::views::transform([&grid](auto pos) {
-                           return grid.is_dead_end_cell(pos) ? 1 : 0;
-                         }),
-                         0);
-  fmt::print("Dead ends: {}\n", dead_ends);
-
-  auto d = stdex::mdspan<
-      int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
-      distances.data(), grid.height_, grid.width_);
-  auto max_path_len = *std::max_element(distances.begin(), distances.end());
-  std::function<sf::Color(const Grid &, int, int)> colorizer =
-      [&max_path_len, &d](auto &g, auto c, auto r) {
-        int shade = 255 * d(c, r) / max_path_len;
-        return sf::Color(shade, shade, shade);
-      };
+  regen_maze();
 
   // create the window
   sf::RenderWindow window(sf::VideoMode(800, 600), "Maze window");
-
-  auto regen_maze = [&]() {
-    fmt::print("Regenerating maze!\n");
-    grid.reset();
-    const auto &method = GeneratorRegistry::GetMazeGeneratorByIndex(method_idx);
-    method_name = method.name;
-    method.generate(grid);
-    distances = dijkstra_distances(grid, {grid.width_ / 2, grid.height_ / 2});
-
-    path = longest_path_(grid, distances);
-    d = stdex::mdspan<
-        int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
-        distances.data(), grid.height_, grid.width_);
-    max_path_len = *std::max_element(distances.begin(), distances.end());
-  };
 
   // run the program as long as the window is open
   while (window.isOpen()) {
@@ -229,19 +226,19 @@ void gui_main(size_t width, size_t height, size_t method_idx) {
       case sf::Event::TextEntered:
         switch (event.text.unicode) {
         case '-':
-          // width--;
+          width--;
           need_regen = true;
           break;
         case '+':
-          // width++;
+          width++;
           need_regen = true;
           break;
         case '[':
-          // height--;
+          height--;
           need_regen = true;
           break;
         case ']':
-          // height++;
+          height++;
           need_regen = true;
           break;
 
@@ -257,6 +254,9 @@ void gui_main(size_t width, size_t height, size_t method_idx) {
               (method_idx + GeneratorRegistry::GetMazeGeneratorCount() - 1) %
               GeneratorRegistry::GetMazeGeneratorCount();
           need_regen = true;
+          break;
+        case 'p':
+          fmt::print("{}\n", dmaze->grid);
           break;
         }
         break;
@@ -276,7 +276,7 @@ void gui_main(size_t width, size_t height, size_t method_idx) {
     window.clear(sf::Color::Black);
 
     // draw everything here...
-    draw_maze(grid, window, colorizer, path, method_name);
+    draw_maze(window, *dmaze);
 
     // end the current frame
     window.display();
