@@ -249,6 +249,26 @@ std::tuple<CellCoordinate, int> furthest_cell(const Grid &grid,
                                               std::vector<int> &distances);
 std::vector<CellCoordinate> longest_path_(Grid &grid,
                                           std::vector<int> &distances);
+
+class GeneratorRegistry {
+public:
+  struct RegistryConfig {
+    RegistryConfig(char sn, std::string n, std::function<void(Grid &)> f)
+        : short_name(sn), name(std::move(n)), generate(f) {
+      GeneratorRegistry::registry_.push_back(this);
+    }
+    char short_name;
+    std::string name;
+    std::function<void(Grid &)> generate;
+  };
+
+  // static RegistryConfig &GetMazeGeneratorByShortName();
+  // static RegistryConfig &GetMazeGeneratorByName();
+
+private:
+  static std::vector<RegistryConfig *> registry_;
+};
+
 }; // namespace jt::maze
 
 // FIXME
@@ -256,7 +276,7 @@ extern std::array<char, 6> all_methods;
 extern size_t method;
 std::string method_name(char m);
 std::vector<int> gen_maze(jt::maze::Grid &grid);
-
+// Generator registry
 ////////////////////////////////////////////////////////////////////////////////
 // Ascii output
 ////////////////////////////////////////////////////////////////////////////////

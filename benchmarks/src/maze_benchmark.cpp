@@ -8,6 +8,7 @@
 
 namespace {}; // namespace
 
+#if 0 // Curiousity, are any of these other RNG more efficient?
 static void BM_minstd_rand0(benchmark::State &state) {
   std::random_device rd;
   std::minstd_rand0 gen;
@@ -55,6 +56,7 @@ static void BM_ranlux24(benchmark::State &state) {
   }
 }
 BENCHMARK(BM_ranlux24);
+#endif
 
 static void BM_binary_tree(benchmark::State &state) {
   const size_t width = state.range(0);
