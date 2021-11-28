@@ -109,10 +109,12 @@ struct DrawableMaze {
   std::string method_name;
   size_t max_path_len;
   std::function<sf::Color(const Grid &, int, int)> colorizer; // FIXME
+  bool show_solution = false;
 };
 
 void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
-  auto &[grid, distances, path, gen_name, max_path_len, colorizer] = dmaze;
+  auto &[grid, distances, path, gen_name, max_path_len, colorizer,
+         show_solution] = dmaze;
   auto window_size = window.getSize();
   const float cell_width = 800.0 / (grid.width_ + 2);
   const float cell_height = 600.0 / (grid.height_ + 2);
@@ -128,7 +130,7 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     float y2 = cell_height * (row + 2);
 
     // Fill?
-    {
+    if (show_solution) {
       sf::RectangleShape cell(sf::Vector2f(cell_width, cell_height));
       cell.setPosition(x1, y1);
       cell.setFillColor(colorizer(grid, row, col));
@@ -183,9 +185,24 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
 
       window.draw(line, 2, sf::Lines);
     }
+    // Draw start/end
+    if (cell == path.front()) {
+      sf::CircleShape shape((std::min(cell_width, cell_height) / 2) * 0.8);
+      shape.setPosition(x1 + cell_width * 0.1, y1 + cell_height * 0.1);
+      shape.setFillColor(sf::Color::Cyan);
+      window.draw(shape);
+    }
+    if (cell == path.back()) {
+      sf::CircleShape shape((std::min(cell_width, cell_height) / 2) * 0.8);
+      shape.setPosition(x1 + cell_width * 0.1, y1 + cell_height * 0.1);
+      shape.setFillColor(sf::Color::Magenta);
+      window.draw(shape);
+    }
   }
 
-  draw_path(grid, window, path);
+  if (show_solution) {
+    draw_path(grid, window, path);
+  }
 
   // Labels
   static sf::Font font;
@@ -263,8 +280,13 @@ void gui_main(size_t width, size_t height, size_t method_idx) {
         case 'p':
           fmt::print("{}\n", dmaze->grid);
           break;
+        case 's':
+          dmaze->show_solution = !dmaze->show_solution;
+          break;
+        case 'q':
+          return;
+          break;
         }
-        break;
       case sf::Event::KeyPressed:
         if (event.key.code == sf::Keyboard::Space) {
           need_regen = true;
