@@ -102,6 +102,28 @@ public:
                       : std::make_optional(CellCoordinate{c.row, c.col - 1});
   }
 
+  // Helpers to get individual neighbors
+  auto connected_cell_north(CellCoordinate c) const {
+    auto m = as_mdspan();
+    auto n = cell_north(c);
+    return n && m(n->row, n->col).down == Wall::Open ? n : std::nullopt;
+  }
+  auto connected_cell_east(CellCoordinate c) const {
+    auto m = as_mdspan();
+    auto e = cell_east(c);
+    return e && m(c.row, c.col).right == Wall::Open ? e : std::nullopt;
+  }
+  auto connected_cell_south(CellCoordinate c) const {
+    auto m = as_mdspan();
+    auto s = cell_south(c);
+    return s && m(c.row, c.col).down == Wall::Open ? s : std::nullopt;
+  }
+  auto connected_cell_west(CellCoordinate c) const {
+    auto m = as_mdspan();
+    auto w = cell_west(c);
+    return w && m(w->row, w->col).right == Wall::Open ? w : std::nullopt;
+  }
+
   // Generate a random CellCoordinate within the grid
   auto random_cell() {
     std::uniform_int_distribution<> d_w(0, width_ - 1);
@@ -113,16 +135,11 @@ public:
   // Helpers for getting all connected neighbors
   std::array<std::optional<CellCoordinate>, 4>
   get_connected_neighbors_(CellCoordinate c) const {
-    auto n = cell_north(c);
-    auto e = cell_east(c);
-    auto s = cell_south(c);
-    auto w = cell_west(c);
-    auto m = as_mdspan();
     return {
-        n && m(n->row, n->col).down == Wall::Open ? n : std::nullopt,
-        e && m(c.row, c.col).right == Wall::Open ? e : std::nullopt,
-        s && m(c.row, c.col).down == Wall::Open ? s : std::nullopt,
-        w && m(w->row, w->col).right == Wall::Open ? w : std::nullopt,
+        connected_cell_north(c),
+        connected_cell_east(c),
+        connected_cell_south(c),
+        connected_cell_west(c),
     };
   }
 
@@ -222,7 +239,6 @@ public:
   }
 };
 
-
 void binary_tree_maze(Grid &grid);
 void binary_tree_maze_p(Grid &grid);
 void binary_tree_maze_p2(Grid &grid);
@@ -264,9 +280,7 @@ public:
     }
   };
 
-  static const std::vector<RegistryConfig> &AllMethods() {
-    return registry_;
-  }
+  static const std::vector<RegistryConfig> &AllMethods() { return registry_; }
 
   static const RegistryConfig &GetMazeGeneratorByShortName(char sn) {
     auto m = std::find_if(registry_.begin(), registry_.end(),

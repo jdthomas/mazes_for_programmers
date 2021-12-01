@@ -33,10 +33,10 @@ using namespace jt::maze;
 // GUI output
 ////////////////////////////////////////////////////////////////////////////////
 void draw_path(const Grid &grid, sf::RenderWindow &window,
-               const std::vector<CellCoordinate> &path) {
+               const std::vector<CellCoordinate> &path,
+               const sf::Color line_color = sf::Color::Red) {
   const float cell_width = 800.0 / (grid.width_ + 2);
   const float cell_height = 600.0 / (grid.height_ + 2);
-  const auto line_color = sf::Color::Red;
 
   const auto center_of_cell = [cell_width, cell_height](auto row, auto col) {
     // Col/row correctly swapped here, i guess i have always been drwing these
@@ -75,6 +75,8 @@ struct DrawableMaze {
     distances = dijkstra_distances(grid, {grid.width_ / 2, grid.height_ / 2});
     path = longest_path_(grid, distances);
     method_name = method.name;
+    // Player starts at the start of "path"
+    player_path.push_back(path.front());
 
     auto t3 = high_resolution_clock::now();
     std::chrono::duration<double, std::milli> gen_delta_ms = t2 - t1;
@@ -103,6 +105,7 @@ struct DrawableMaze {
                            0);
     fmt::print("Dead ends: {}\n", dead_ends);
   }
+
   Grid grid;
   std::vector<int> distances;
   std::vector<CellCoordinate> path;
@@ -110,18 +113,17 @@ struct DrawableMaze {
   size_t max_path_len;
   std::function<sf::Color(const Grid &, int, int)> colorizer; // FIXME
   bool show_solution = false;
+  std::vector<CellCoordinate> player_path{};
 };
 
 void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
-  auto &[grid, distances, path, gen_name, max_path_len, colorizer,
-         show_solution] = dmaze;
   auto window_size = window.getSize();
-  const float cell_width = 800.0 / (grid.width_ + 2);
-  const float cell_height = 600.0 / (grid.height_ + 2);
+  const float cell_width = 800.0 / (dmaze.grid.width_ + 2);
+  const float cell_height = 600.0 / (dmaze.grid.height_ + 2);
   const auto line_color = sf::Color::Green;
 
   // Fill the cells??
-  for (const auto &cell : grid.positions()) {
+  for (const auto &cell : dmaze.grid.positions()) {
     const auto &[row, col] = cell;
     float x1 = cell_width * (col + 1);
     float x2 = cell_width * (col + 2);
@@ -130,10 +132,10 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     float y2 = cell_height * (row + 2);
 
     // Fill?
-    if (show_solution) {
+    if (dmaze.show_solution) {
       sf::RectangleShape cell(sf::Vector2f(cell_width, cell_height));
       cell.setPosition(x1, y1);
-      cell.setFillColor(colorizer(grid, row, col));
+      cell.setFillColor(dmaze.colorizer(dmaze.grid, row, col));
       window.draw(cell);
     }
   }
@@ -143,7 +145,7 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     float x1 = cell_width * (0 + 1);
 
     float y1 = cell_height * (0 + 1);
-    float y2 = cell_height * (grid.height_ + 1);
+    float y2 = cell_height * (dmaze.grid.height_ + 1);
     sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
                          sf::Vertex(sf::Vector2f(x1, y2), line_color)};
 
@@ -153,7 +155,7 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   // Draw left border
   {
     float x1 = cell_width * (0 + 1);
-    float x2 = cell_width * (grid.width_ + 1);
+    float x2 = cell_width * (dmaze.grid.width_ + 1);
 
     float y1 = cell_height * (0 + 1);
     sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
@@ -162,7 +164,7 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     window.draw(line, 2, sf::Lines);
   }
   // Draw rest of maze
-  for (const auto &cell : grid.positions()) {
+  for (const auto &cell : dmaze.grid.positions()) {
     const auto &[row, col] = cell;
     float x1 = cell_width * (col + 1);
     float x2 = cell_width * (col + 2);
@@ -171,7 +173,7 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     float y2 = cell_height * (row + 2);
 
     // Right wall
-    if (grid(cell).right != Wall::Open) {
+    if (dmaze.grid(cell).right != Wall::Open) {
       sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x2, y1), line_color),
                            sf::Vertex(sf::Vector2f(x2, y2), line_color)};
 
@@ -179,20 +181,20 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     }
 
     // Bottom wall
-    if (grid(cell).down != Wall::Open) {
+    if (dmaze.grid(cell).down != Wall::Open) {
       sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y2), line_color),
                            sf::Vertex(sf::Vector2f(x2, y2), line_color)};
 
       window.draw(line, 2, sf::Lines);
     }
     // Draw start/end
-    if (cell == path.front()) {
+    if (cell == dmaze.path.front()) {
       sf::CircleShape shape((std::min(cell_width, cell_height) / 2) * 0.8);
       shape.setPosition(x1 + cell_width * 0.1, y1 + cell_height * 0.1);
       shape.setFillColor(sf::Color::Cyan);
       window.draw(shape);
     }
-    if (cell == path.back()) {
+    if (cell == dmaze.path.back()) {
       sf::CircleShape shape((std::min(cell_width, cell_height) / 2) * 0.8);
       shape.setPosition(x1 + cell_width * 0.1, y1 + cell_height * 0.1);
       shape.setFillColor(sf::Color::Magenta);
@@ -200,9 +202,10 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     }
   }
 
-  if (show_solution) {
-    draw_path(grid, window, path);
+  if (dmaze.show_solution) {
+    draw_path(dmaze.grid, window, dmaze.path);
   }
+  draw_path(dmaze.grid, window, dmaze.player_path, sf::Color::Blue);
 
   // Labels
   static sf::Font font;
@@ -212,12 +215,27 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
       throw std::runtime_error("Cannot find font");
     }
   });
-  sf::Text text;
-  text.setFont(font);
-  text.setString(gen_name);
-  text.setCharacterSize(22); // in pixels, not points!
-  text.setFillColor(sf::Color::Yellow);
-  window.draw(text);
+  {
+    sf::Text text;
+    text.setFont(font);
+    text.setString(dmaze.method_name);
+    text.setCharacterSize(22); // in pixels, not points!
+    text.setFillColor(sf::Color::Yellow);
+    window.draw(text);
+  }
+
+  if (dmaze.path.back() == dmaze.player_path.back()) {
+    sf::Text text;
+    text.setFont(font);
+    text.setString("WINNER");
+    text.setCharacterSize(44); // in pixels, not points!
+    text.setFillColor(sf::Color::Yellow);
+    sf::FloatRect textRect = text.getLocalBounds();
+    text.setOrigin(textRect.left + textRect.width / 2.0f,
+                   textRect.top + textRect.height / 2.0f);
+    text.setPosition(sf::Vector2f(800 / 2.0f, 600 / 2.0f));
+    window.draw(text);
+  }
 }
 
 void gui_main(size_t width, size_t height, size_t method_idx) {
@@ -231,6 +249,16 @@ void gui_main(size_t width, size_t height, size_t method_idx) {
 
   // create the window
   sf::RenderWindow window(sf::VideoMode(800, 600), "Maze window");
+  auto player_move = [&](auto next) {
+    if (next) {
+      if (dmaze->player_path.size() > 1 &&
+          next == dmaze->player_path.rbegin()[1]) {
+        dmaze->player_path.pop_back();
+      } else {
+        dmaze->player_path.push_back(*next);
+      }
+    }
+  };
 
   // run the program as long as the window is open
   while (window.isOpen()) {
@@ -288,8 +316,28 @@ void gui_main(size_t width, size_t height, size_t method_idx) {
           break;
         }
       case sf::Event::KeyPressed:
-        if (event.key.code == sf::Keyboard::Space) {
+        switch (event.key.code) {
+        case sf::Keyboard::Space:
           need_regen = true;
+          break;
+        case sf::Keyboard::Left:
+          player_move(
+              dmaze->grid.connected_cell_west(dmaze->player_path.back()));
+          break;
+        case sf::Keyboard::Right:
+          player_move(
+              dmaze->grid.connected_cell_east(dmaze->player_path.back()));
+          break;
+        case sf::Keyboard::Down:
+          player_move(
+              dmaze->grid.connected_cell_south(dmaze->player_path.back()));
+          break;
+        case sf::Keyboard::Up:
+          player_move(
+              dmaze->grid.connected_cell_north(dmaze->player_path.back()));
+          break;
+        default:
+          break;
         }
         break;
       default:
