@@ -358,9 +358,26 @@ void gui_main(size_t width, size_t height, size_t method_idx) {
   }
 }
 
+void usage() {
+  fmt::print("========================================\n");
+  fmt::print("Solve the maze!\n");
+  fmt::print("Start at the cyan marker. Use the arrow keys to find a path to the magenta mark.\n");
+  fmt::print("\n");
+  fmt::print("Controls:\n");
+  fmt::print("arrows      move player path in direction of arrow.\n");
+  fmt::print("Space       generate a new maze.\n");
+  fmt::print("'j' / 'k'   cycle through various maze generators (and generate new maze).\n");
+  fmt::print("'-' / '+'   shrink/grow horizontally by one (and generate new maze).\n");
+  fmt::print("'[' / ']'   shrink/grow vertically by one (and generate new maze).\n");
+  fmt::print("'s'         toggle revealing/hiding the solution.\n");
+  fmt::print("========================================\n");
+}
+
 int main(int argc, char **argv) {
-  if (argc < 3)
+  if (argc <= 3)
     return 1;
+
+  usage();
 
   size_t width = static_cast<size_t>(std::strtol(argv[1], nullptr, 10));
   size_t height = static_cast<size_t>(std::strtol(argv[2], nullptr, 10));
