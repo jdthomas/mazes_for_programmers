@@ -3,9 +3,12 @@
   "version-string": "1.0.0",
   "dependencies": [
     "benchmark",
+    "cxxopts",
     "fmt",
     "gtest",
+    "libpng",
     "mdspan",
+    "pngpp",
     "parallelstl",
     "range-v3",
     "tbb",

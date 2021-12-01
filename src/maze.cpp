@@ -127,7 +127,8 @@ bool operator==(const CellCoordinate &a, const CellCoordinate &b) {
 }
 Grid::Grid(size_t width, size_t height)
     : width_{width}, height_{height}, cells_{width * height},
-      mdspan_{cells_.data(), height_, width_}, rd{}, gen{rd()} {
+      mdspan_{cells_.data(), height_, width_}, rd{}, gen{rd()},
+      mask(width * height) {
 
   auto m = as_mdspan();
   for (int row = 0; row < m.extent(0); row++) {

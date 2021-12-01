@@ -2,6 +2,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cxxopts.hpp>
 #include <deque>
 #include <experimental/mdspan>
 #include <fmt/chrono.h>
@@ -9,6 +10,7 @@
 #include <fmt/ranges.h>
 #include <iostream>
 #include <mutex>
+#include <png++/png.hpp>
 #if defined(__GLIBCXX__)
 #include <execution>
 namespace pstl = std;
@@ -64,15 +66,25 @@ void draw_path(const Grid &grid, sf::RenderWindow &window,
 }
 
 struct DrawableMaze {
+  DrawableMaze(GridMask msk, const GeneratorRegistry::RegistryConfig &method)
+      : grid{msk} {
+    init(method);
+  }
   DrawableMaze(size_t width, size_t height,
                const GeneratorRegistry::RegistryConfig &method)
       : grid{width, height} {
+    init(method);
+  }
+
+  void init(const GeneratorRegistry::RegistryConfig &method) {
     using std::chrono::high_resolution_clock;
     auto t1 = high_resolution_clock::now();
     method.generate(grid);
     auto t2 = high_resolution_clock::now();
 
-    distances = dijkstra_distances(grid, {grid.width_ / 2, grid.height_ / 2});
+    CellCoordinate start_pos =
+        grid.random_cell(); // {grid.width_ / 2, grid.height_ / 2};
+    distances = dijkstra_distances(grid, start_pos);
     path = longest_path_(grid, distances);
     method_name = method.name;
     // Player starts at the start of "path"
@@ -200,6 +212,13 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
       shape.setFillColor(sf::Color::Magenta);
       window.draw(shape);
     }
+    // if(dmaze.grid.masked_at(cell))
+    // {
+    //   sf::CircleShape shape((std::min(cell_width, cell_height) / 2) * 0.8);
+    //   shape.setPosition(x1 + cell_width * 0.1, y1 + cell_height * 0.1);
+    //   shape.setFillColor(sf::Color::Red);
+    //   window.draw(shape);
+    // }
   }
 
   if (dmaze.show_solution) {
@@ -238,11 +257,12 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   }
 }
 
-void gui_main(size_t width, size_t height, size_t method_idx) {
+void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
   std::unique_ptr<DrawableMaze> dmaze;
-  auto regen_maze = [&dmaze, &method_idx, &width, &height]() {
+  auto regen_maze = [&dmaze, &method_idx, &width, &height, &mask]() {
     const auto &method = GeneratorRegistry::GetMazeGeneratorByIndex(method_idx);
-    dmaze = std::make_unique<DrawableMaze>(width, height, method);
+    // dmaze = std::make_unique<DrawableMaze>(width, height, method);
+    dmaze = std::make_unique<DrawableMaze>(mask, method);
   };
 
   regen_maze();
@@ -358,36 +378,80 @@ void gui_main(size_t width, size_t height, size_t method_idx) {
   }
 }
 
-void usage() {
-  fmt::print("========================================\n");
-  fmt::print("Solve the maze!\n");
-  fmt::print("Start at the cyan marker. Use the arrow keys to find a path to the magenta mark.\n");
-  fmt::print("\n");
-  fmt::print("Controls:\n");
-  fmt::print("arrows      move player path in direction of arrow.\n");
-  fmt::print("Space       generate a new maze.\n");
-  fmt::print("'j' / 'k'   cycle through various maze generators (and generate new maze).\n");
-  fmt::print("'-' / '+'   shrink/grow horizontally by one (and generate new maze).\n");
-  fmt::print("'[' / ']'   shrink/grow vertically by one (and generate new maze).\n");
-  fmt::print("'s'         toggle revealing/hiding the solution.\n");
-  fmt::print("========================================\n");
+static void gui_usage() {
+  std::string description =
+      "========================================\n"
+      "Solve the maze!\n"
+      "Start at the cyan marker. Use the arrow keys to find a path to "
+      "the magenta mark.\n"
+      "\n"
+      "Controls:\n"
+      "arrows      move player path in direction of arrow.\n"
+      "Space       generate a new maze.\n"
+      "'j' / 'k'   cycle through various maze generators (and generate new "
+      "maze).\n"
+      "'-' / '+'   shrink/grow horizontally by one (and generate new maze).\n"
+      "'[' / ']'   shrink/grow vertically by one (and generate new maze).\n"
+      "'s'         toggle revealing/hiding the solution.\n"
+      "========================================\n";
+  fmt::print(description);
+}
+
+static auto read_mask(std::string fn, size_t width, size_t height, bool invert)
+    -> GridMask {
+  png::image<png::gray_pixel> image(fn);
+  width = width == 0 ? image.get_width() : width;
+  height = height == 0 ? image.get_height() : height;
+  image.resize(width, height);
+  std::vector<uint8_t> mask(width * height);
+  auto pix_to_mask = [invert]() {
+    return invert ? [](uint8_t p) -> uint8_t { return p > 128; }
+                  : [](uint8_t p) -> uint8_t { return p < 128; };
+  }();
+  auto d = stdex::mdspan<
+      uint8_t, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
+      mask.data(), height, width);
+  for (int i = 0; i < height; i++)
+    for (int j = 0; j < width; j++) {
+      d(i, j) = pix_to_mask(image.get_pixel(j, i));
+    }
+  fmt::print("{}", mask);
+  return GridMask{width, height, std::move(mask)};
 }
 
 int main(int argc, char **argv) {
-  if (argc <= 3)
-    return 1;
+  cxxopts::Options options("maze_gui", "Play with mazes!");
+  // clang-format off
+  options.add_options()
+    ("w,width", "width of maze to generate", cxxopts::value<size_t>()->default_value("0"))
+    ("v,height", "width of maze to generate", cxxopts::value<size_t>()->default_value("0"))
+    ("m,mask", "File name", cxxopts::value<std::string>())
+    ("i,invert", "Invert the mask",  cxxopts::value<bool>()->default_value("false"))
+    ("d,method", "Name of generation method",  cxxopts::value<std::string>()->default_value("B"))
+    ("h,help", "Print usage")
+    ;
+  // clang-format on
 
-  usage();
+  auto result = options.parse(argc, argv);
+  if (result.count("help")) {
+    fmt::print("{}\n", options.help());
+    return 0;
+  }
+  size_t width = result["width"].as<size_t>();
+  size_t height = result["height"].as<size_t>();
 
-  size_t width = static_cast<size_t>(std::strtol(argv[1], nullptr, 10));
-  size_t height = static_cast<size_t>(std::strtol(argv[2], nullptr, 10));
+  gui_usage();
+
+  auto msk = read_mask(result["mask"].as<std::string>(), width, height,
+                       result["invert"].as<bool>());
+  auto method_name = result["method"].as<std::string>();
   size_t method_idx =
-      GeneratorRegistry::GetMazeGeneratorIndexByShortName(argv[3][0]);
+      GeneratorRegistry::GetMazeGeneratorIndexByShortName(method_name[0]);
 
   auto &m = GeneratorRegistry::AllMethods();
   jt::maze::ensure_registry();
 
-  gui_main(width, height, method_idx);
+  gui_main(width, height, method_idx, msk);
 
   return 0;
 }

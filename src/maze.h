@@ -36,8 +36,14 @@ struct CellCoordinate {
 bool operator<(const CellCoordinate &a, const CellCoordinate &b);
 bool operator==(const CellCoordinate &a, const CellCoordinate &b);
 
+struct GridMask {
+  size_t width, height;
+  std::vector<uint8_t> mask;
+};
+
 struct Grid {
   Grid(size_t width, size_t height);
+  Grid(GridMask msk) : Grid(msk.width, msk.height) { mask = msk.mask; };
   size_t width_, height_;
 
 private:
@@ -50,7 +56,8 @@ private:
                 stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
       mdspan_;
 
-  std::random_device rd;
+  std::random_device rd{};
+  std::vector<uint8_t> mask{};
 
 public:
   std::mt19937 gen;
@@ -82,24 +89,39 @@ public:
            });
   }
 
+  // mask helpers
+  stdex::mdspan<uint8_t,
+                stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
+  mask_as_mdspan() const {
+    // fixme
+    return stdex::mdspan{const_cast<uint8_t *>(mask.data()), height_, width_};
+  }
+  bool masked_at(CellCoordinate c) const {
+    auto m = mask_as_mdspan();
+    return 0 != m(c.row, c.col);
+  }
   // Helpers to get neighboring CellCoordinate for each direction
   auto cell_north(CellCoordinate c) const {
-    return c.row == 0 ? std::nullopt
-                      : std::make_optional(CellCoordinate{c.row - 1, c.col});
+    auto neighbor = CellCoordinate{c.row - 1, c.col};
+    return c.row == 0 || masked_at(neighbor) ? std::nullopt
+                                             : std::make_optional(neighbor);
   }
   auto cell_east(CellCoordinate c) const {
-    return c.col >= (width_ - 1)
+    auto neighbor = CellCoordinate{c.row, c.col + 1};
+    return c.col >= (width_ - 1) || masked_at(neighbor)
                ? std::nullopt
-               : std::make_optional(CellCoordinate{c.row, c.col + 1});
+               : std::make_optional(neighbor);
   }
   auto cell_south(CellCoordinate c) const {
-    return c.row >= (height_ - 1)
+    auto neighbor = CellCoordinate{c.row + 1, c.col};
+    return c.row >= (height_ - 1) || masked_at(neighbor)
                ? std::nullopt
-               : std::make_optional(CellCoordinate{c.row + 1, c.col});
+               : std::make_optional(neighbor);
   }
   auto cell_west(CellCoordinate c) const {
-    return c.col == 0 ? std::nullopt
-                      : std::make_optional(CellCoordinate{c.row, c.col - 1});
+    auto neighbor = CellCoordinate{c.row, c.col - 1};
+    return c.col == 0 || masked_at(neighbor) ? std::nullopt
+                                             : std::make_optional(neighbor);
   }
 
   // Helpers to get individual neighbors
@@ -128,8 +150,12 @@ public:
   auto random_cell() {
     std::uniform_int_distribution<> d_w(0, width_ - 1);
     std::uniform_int_distribution<> d_h(0, height_ - 1);
-    return CellCoordinate{static_cast<size_t>(d_h(gen)),
-                          static_cast<size_t>(d_w(gen))};
+    CellCoordinate c;
+    do {
+      c = CellCoordinate{static_cast<size_t>(d_h(gen)),
+                         static_cast<size_t>(d_w(gen))};
+    } while (masked_at(c));
+    return c;
   }
 
   // Helpers for getting all connected neighbors
