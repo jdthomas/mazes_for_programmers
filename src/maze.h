@@ -58,6 +58,9 @@ private:
 
   std::random_device rd{};
   std::vector<uint8_t> mask{};
+  stdex::mdspan<uint8_t,
+                stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
+      mask_as_mdspan_;
 
 public:
   std::mt19937 gen;
@@ -90,11 +93,9 @@ public:
   }
 
   // mask helpers
-  stdex::mdspan<uint8_t,
-                stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
-  mask_as_mdspan() const {
+  auto mask_as_mdspan() const {
     // fixme
-    return stdex::mdspan{const_cast<uint8_t *>(mask.data()), height_, width_};
+    return mask_as_mdspan_;
   }
   bool masked_at(CellCoordinate c) const {
     auto m = mask_as_mdspan();
