@@ -44,10 +44,18 @@ target_compile_features(mazes_stats PUBLIC cxx_std_17)
 if (APPLE)
 find_package(SFML COMPONENTS system window graphics)
 if (SFML_FOUND)
-  add_executable(mazes_gui src/gui.cpp)
+  add_executable(mazes_gui MACOSX_BUNDLE src/gui.cpp)
   target_link_libraries(mazes_gui mazes fmt::fmt png_static std::mdspan sfml-graphics TBB::tbb cxxopts::cxxopts ${CMAKE_THREAD_LIBS_INIT})
   target_include_directories(mazes_gui PRIVATE ${PNGPP_INCLUDE_DIRS})
   target_compile_features(mazes_gui PUBLIC cxx_std_17)
+  set_target_properties(mazes_gui PROPERTIES
+      BUNDLE True
+      MACOSX_BUNDLE_GUI_IDENTIFIER
+      com.coffeetocode.mazes_gui
+      MACOSX_BUNDLE_BUNDLE_NAME mazes_gui
+      MACOSX_BUNDLE_BUNDLE_VERSION "0.1"
+      MACOSX_BUNDLE_SHORT_VERSION_STRING "0.1"
+    )
 endif ()
 endif ()
 # 

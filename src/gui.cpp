@@ -1,3 +1,7 @@
+#include <fmt/chrono.h>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -5,9 +9,6 @@
 #include <cxxopts.hpp>
 #include <deque>
 #include <experimental/mdspan>
-#include <fmt/chrono.h>
-#include <fmt/format.h>
-#include <fmt/ranges.h>
 #include <iostream>
 #include <mutex>
 #include <png++/png.hpp>
@@ -18,13 +19,12 @@ namespace pstl = std;
 #include <pstl/algorithm>
 #include <pstl/execution>
 #endif
+#include <SFML/Graphics.hpp>
 #include <random>
 #include <range/v3/all.hpp>
 #include <set>
 #include <unordered_map>
 #include <vector>
-
-#include <SFML/Graphics.hpp>
 
 #include "maze.h"
 
@@ -46,8 +46,7 @@ void draw_path(const Grid &grid, sf::RenderWindow &window,
     return std::pair{(1.5 + col) * cell_width, (1.5 + row) * cell_height};
   };
 
-  if (path.empty())
-    return;
+  if (path.empty()) return;
 
   auto x = ranges::adjacent_find(
       path,
@@ -83,7 +82,7 @@ struct DrawableMaze {
     auto t2 = high_resolution_clock::now();
 
     CellCoordinate start_pos =
-        grid.random_cell(); // {grid.width_ / 2, grid.height_ / 2};
+        grid.random_cell();  // {grid.width_ / 2, grid.height_ / 2};
     distances = dijkstra_distances(grid, start_pos);
     path = longest_path_(grid, distances);
     method_name = method.name;
@@ -123,7 +122,7 @@ struct DrawableMaze {
   std::vector<CellCoordinate> path;
   std::string method_name;
   size_t max_path_len;
-  std::function<sf::Color(const Grid &, int, int)> colorizer; // FIXME
+  std::function<sf::Color(const Grid &, int, int)> colorizer;  // FIXME
   bool show_solution = false;
   std::vector<CellCoordinate> player_path{};
 };
@@ -238,7 +237,7 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     sf::Text text;
     text.setFont(font);
     text.setString(dmaze.method_name);
-    text.setCharacterSize(22); // in pixels, not points!
+    text.setCharacterSize(22);  // in pixels, not points!
     text.setFillColor(sf::Color::Yellow);
     window.draw(text);
   }
@@ -247,7 +246,7 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     sf::Text text;
     text.setFont(font);
     text.setString("WINNER");
-    text.setCharacterSize(44); // in pixels, not points!
+    text.setCharacterSize(44);  // in pixels, not points!
     text.setFillColor(sf::Color::Yellow);
     sf::FloatRect textRect = text.getLocalBounds();
     text.setOrigin(textRect.left + textRect.width / 2.0f,
@@ -289,83 +288,82 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
     while (window.pollEvent(event)) {
       // "close requested" event: we close the window
       switch (event.type) {
-      case sf::Event::Closed:
-        window.close();
-        break;
-
-      case sf::Event::TextEntered:
-        switch (event.text.unicode) {
-        case '-':
-          width--;
-          need_regen = true;
-          break;
-        case '+':
-          width++;
-          need_regen = true;
-          break;
-        case '[':
-          height--;
-          need_regen = true;
-          break;
-        case ']':
-          height++;
-          need_regen = true;
+        case sf::Event::Closed:
+          window.close();
           break;
 
-        case 'j':
-        case 'J':
-          method_idx =
-              (method_idx + 1) % GeneratorRegistry::GetMazeGeneratorCount();
-          need_regen = true;
-          break;
-        case 'k':
-        case 'K':
-          method_idx =
-              (method_idx + GeneratorRegistry::GetMazeGeneratorCount() - 1) %
-              GeneratorRegistry::GetMazeGeneratorCount();
-          need_regen = true;
-          break;
-        case 'p':
-          fmt::print("{}\n", dmaze->grid);
-          break;
-        case 's':
-          dmaze->show_solution = !dmaze->show_solution;
-          break;
-        case 'q':
-          return;
-          break;
-        }
-      case sf::Event::KeyPressed:
-        switch (event.key.code) {
-        case sf::Keyboard::Space:
-          need_regen = true;
-          break;
-        case sf::Keyboard::Left:
-          player_move(
-              dmaze->grid.connected_cell_west(dmaze->player_path.back()));
-          break;
-        case sf::Keyboard::Right:
-          player_move(
-              dmaze->grid.connected_cell_east(dmaze->player_path.back()));
-          break;
-        case sf::Keyboard::Down:
-          player_move(
-              dmaze->grid.connected_cell_south(dmaze->player_path.back()));
-          break;
-        case sf::Keyboard::Up:
-          player_move(
-              dmaze->grid.connected_cell_north(dmaze->player_path.back()));
+        case sf::Event::TextEntered:
+          switch (event.text.unicode) {
+            case '-':
+              width--;
+              need_regen = true;
+              break;
+            case '+':
+              width++;
+              need_regen = true;
+              break;
+            case '[':
+              height--;
+              need_regen = true;
+              break;
+            case ']':
+              height++;
+              need_regen = true;
+              break;
+
+            case 'j':
+            case 'J':
+              method_idx =
+                  (method_idx + 1) % GeneratorRegistry::GetMazeGeneratorCount();
+              need_regen = true;
+              break;
+            case 'k':
+            case 'K':
+              method_idx = (method_idx +
+                            GeneratorRegistry::GetMazeGeneratorCount() - 1) %
+                           GeneratorRegistry::GetMazeGeneratorCount();
+              need_regen = true;
+              break;
+            case 'p':
+              fmt::print("{}\n", dmaze->grid);
+              break;
+            case 's':
+              dmaze->show_solution = !dmaze->show_solution;
+              break;
+            case 'q':
+              return;
+              break;
+          }
+        case sf::Event::KeyPressed:
+          switch (event.key.code) {
+            case sf::Keyboard::Space:
+              need_regen = true;
+              break;
+            case sf::Keyboard::Left:
+              player_move(
+                  dmaze->grid.connected_cell_west(dmaze->player_path.back()));
+              break;
+            case sf::Keyboard::Right:
+              player_move(
+                  dmaze->grid.connected_cell_east(dmaze->player_path.back()));
+              break;
+            case sf::Keyboard::Down:
+              player_move(
+                  dmaze->grid.connected_cell_south(dmaze->player_path.back()));
+              break;
+            case sf::Keyboard::Up:
+              player_move(
+                  dmaze->grid.connected_cell_north(dmaze->player_path.back()));
+              break;
+            default:
+              break;
+          }
           break;
         default:
           break;
-        }
-        break;
-      default:
-        break;
       }
     }
-    if (need_regen)
-      regen_maze();
+    if (need_regen) regen_maze();
 
     // clear the window with black color
     window.clear(sf::Color::Black);
@@ -423,8 +421,8 @@ int main(int argc, char **argv) {
   cxxopts::Options options("maze_gui", "Play with mazes!");
   // clang-format off
   options.add_options()
-    ("w,width", "width of maze to generate", cxxopts::value<size_t>()->default_value("0"))
-    ("v,height", "width of maze to generate", cxxopts::value<size_t>()->default_value("0"))
+    ("w,width", "width of maze to generate", cxxopts::value<size_t>()->default_value("10"))
+    ("v,height", "width of maze to generate", cxxopts::value<size_t>()->default_value("10"))
     ("m,mask", "File name", cxxopts::value<std::string>())
     ("i,invert", "Invert the mask",  cxxopts::value<bool>()->default_value("false"))
     ("d,method", "Name of generation method",  cxxopts::value<std::string>()->default_value("B"))
@@ -442,8 +440,10 @@ int main(int argc, char **argv) {
 
   gui_usage();
 
-  auto msk = read_mask(result["mask"].as<std::string>(), width, height,
-                       result["invert"].as<bool>());
+  auto msk = result.count("mask")
+                 ? read_mask(result["mask"].as<std::string>(), width, height,
+                             result["invert"].as<bool>())
+                 : GridMask{width, height, {}};
   auto method_name = result["method"].as<std::string>();
   size_t method_idx =
       GeneratorRegistry::GetMazeGeneratorIndexByShortName(method_name[0]);
