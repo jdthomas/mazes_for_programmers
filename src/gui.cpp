@@ -34,35 +34,6 @@ using namespace jt::maze;
 ////////////////////////////////////////////////////////////////////////////////
 // GUI output
 ////////////////////////////////////////////////////////////////////////////////
-void draw_path(const Grid &grid, sf::RenderWindow &window,
-               const std::vector<CellCoordinate> &path,
-               const sf::Color line_color = sf::Color::Red) {
-  const float cell_width = 800.0 / (grid.width_ + 2);
-  const float cell_height = 600.0 / (grid.height_ + 2);
-
-  const auto center_of_cell = [cell_width, cell_height](auto row, auto col) {
-    // Col/row correctly swapped here, i guess i have always been drwing these
-    // sideways :P
-    return std::pair{(1.5 + col) * cell_width, (1.5 + row) * cell_height};
-  };
-
-  if (path.empty()) return;
-
-  auto x = ranges::adjacent_find(
-      path,
-      [&window](auto a, auto b) {
-        sf::Vertex l[] = {a, b};
-        window.draw(l, 2, sf::Lines);
-        return false;
-      },
-      [center_of_cell, line_color, &grid](auto pos) {
-        auto &[row, col] = pos;
-        assert(row < grid.height_ && col < grid.width_);
-        auto draw_pos = center_of_cell(row, col);
-        return sf::Vertex(sf::Vector2f(draw_pos.first, draw_pos.second),
-                          line_color);
-      });
-}
 
 struct DrawableMaze {
   DrawableMaze(GridMask msk, const GeneratorRegistry::RegistryConfig &method)
@@ -124,92 +95,86 @@ struct DrawableMaze {
   size_t max_path_len;
   std::function<sf::Color(const Grid &, int, int)> colorizer;  // FIXME
   bool show_solution = false;
+  bool polar_maze = false;
   std::vector<CellCoordinate> player_path{};
 };
 
-void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
-  auto window_size = window.getSize();
-  const float cell_width = 800.0 / (dmaze.grid.width_ + 2);
-  const float cell_height = 600.0 / (dmaze.grid.height_ + 2);
+auto draw_path = [](const Grid &grid, sf::RenderWindow &window,
+                    const std::vector<CellCoordinate> &path,
+                    const auto center_of_cell,
+                    const sf::Color line_color = sf::Color::Red) -> void {
+  if (path.empty()) return;
+
+  auto x = ranges::adjacent_find(
+      path,
+      [&window](auto a, auto b) {
+        sf::Vertex l[] = {a, b};
+        window.draw(l, 2, sf::Lines);
+        return false;
+      },
+      [center_of_cell, line_color, &grid](auto pos) {
+        auto &[row, col] = pos;
+        assert(row < grid.height_ && col < grid.width_);
+        auto draw_pos = center_of_cell(row, col);
+        return sf::Vertex(sf::Vector2f(draw_pos.first, draw_pos.second),
+                          line_color);
+      });
+};
+
+void draw_circle_centered(sf::RenderWindow &window,
+                          std::pair<float, float> center, float radius,
+                          sf::Color color) {
+  sf::CircleShape shape(radius);
+  shape.setPosition(center.first - radius, center.second - radius);
+  shape.setFillColor(color);
+  window.draw(shape);
+}
+
+struct CellCorner {
+  float x, y;
+};
+struct CellPoly {
+  // cornders from top left clockwise...
+  CellCorner a, b, c, d, i;
+  // a ----- b
+  //     i   |
+  // d ----- c
+};
+
+auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
+                           auto cell_polygon, auto center_of_cell,
+                           auto cell_width, auto cell_height) -> void {
   const auto line_color = sf::Color::Green;
-
-  // Fill the cells??
-  for (const auto &cell : dmaze.grid.positions()) {
-    const auto &[row, col] = cell;
-    float x1 = cell_width * (col + 1);
-    float x2 = cell_width * (col + 2);
-
-    float y1 = cell_height * (row + 1);
-    float y2 = cell_height * (row + 2);
-
-    // Fill?
-    if (dmaze.show_solution) {
-      sf::RectangleShape cell(sf::Vector2f(cell_width, cell_height));
-      cell.setPosition(x1, y1);
-      cell.setFillColor(dmaze.colorizer(dmaze.grid, row, col));
-      window.draw(cell);
+  if (dmaze.show_solution) {
+    for (const auto &cell : dmaze.grid.positions()) {
+      auto corners = cell_polygon(cell);
+      sf::ConvexShape polygon;
+      polygon.setPointCount(4);
+      polygon.setPoint(0, sf::Vector2f(corners.a.x, corners.a.y));
+      polygon.setPoint(1, sf::Vector2f(corners.b.x, corners.b.y));
+      polygon.setPoint(2, sf::Vector2f(corners.c.x, corners.c.y));
+      polygon.setPoint(3, sf::Vector2f(corners.d.x, corners.d.y));
+      polygon.setFillColor(dmaze.colorizer(dmaze.grid, cell.row, cell.col));
+      window.draw(polygon);
     }
   }
 
-  // Draw top border
-  {
-    float x1 = cell_width * (0 + 1);
-
-    float y1 = cell_height * (0 + 1);
-    float y2 = cell_height * (dmaze.grid.height_ + 1);
-    sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
-                         sf::Vertex(sf::Vector2f(x1, y2), line_color)};
-
-    window.draw(line, 2, sf::Lines);
-  }
-
-  // Draw left border
-  {
-    float x1 = cell_width * (0 + 1);
-    float x2 = cell_width * (dmaze.grid.width_ + 1);
-
-    float y1 = cell_height * (0 + 1);
-    sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
-                         sf::Vertex(sf::Vector2f(x2, y1), line_color)};
-
-    window.draw(line, 2, sf::Lines);
-  }
   // Draw rest of maze
   for (const auto &cell : dmaze.grid.positions()) {
-    const auto &[row, col] = cell;
-    float x1 = cell_width * (col + 1);
-    float x2 = cell_width * (col + 2);
-
-    float y1 = cell_height * (row + 1);
-    float y2 = cell_height * (row + 2);
-
-    // Right wall
-    if (dmaze.grid(cell).right != Wall::Open) {
-      sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x2, y1), line_color),
-                           sf::Vertex(sf::Vector2f(x2, y2), line_color)};
+    auto corners = cell_polygon(cell);
+    if (!dmaze.grid.connected_cell_east(cell)) {
+      sf::Vertex line[] = {
+          sf::Vertex(sf::Vector2f(corners.b.x, corners.b.y), line_color),
+          sf::Vertex(sf::Vector2f(corners.c.x, corners.c.y), line_color)};
 
       window.draw(line, 2, sf::Lines);
     }
-
-    // Bottom wall
-    if (dmaze.grid(cell).down != Wall::Open) {
-      sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y2), line_color),
-                           sf::Vertex(sf::Vector2f(x2, y2), line_color)};
+    if (!dmaze.grid.connected_cell_south(cell)) {
+      sf::Vertex line[] = {
+          sf::Vertex(sf::Vector2f(corners.d.x, corners.d.y), line_color),
+          sf::Vertex(sf::Vector2f(corners.c.x, corners.c.y), line_color)};
 
       window.draw(line, 2, sf::Lines);
-    }
-    // Draw start/end
-    if (cell == dmaze.path.front()) {
-      sf::CircleShape shape((std::min(cell_width, cell_height) / 2) * 0.8);
-      shape.setPosition(x1 + cell_width * 0.1, y1 + cell_height * 0.1);
-      shape.setFillColor(sf::Color::Cyan);
-      window.draw(shape);
-    }
-    if (cell == dmaze.path.back()) {
-      sf::CircleShape shape((std::min(cell_width, cell_height) / 2) * 0.8);
-      shape.setPosition(x1 + cell_width * 0.1, y1 + cell_height * 0.1);
-      shape.setFillColor(sf::Color::Magenta);
-      window.draw(shape);
     }
     // if(dmaze.grid.masked_at(cell))
     // {
@@ -219,11 +184,27 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     //   window.draw(shape);
     // }
   }
+  // Draw start/end
+  {
+    auto cell = dmaze.path.front();
+    auto corners = cell_polygon(cell);
+    draw_circle_centered(window, {corners.i.x, corners.i.y},
+                         .8 * std::min(cell_width, cell_height) / 2,
+                         sf::Color::Cyan);
+  }
+  {
+    auto cell = dmaze.path.back();
+    auto corners = cell_polygon(cell);
+    draw_circle_centered(window, {corners.i.x, corners.i.y},
+                         .8 * std::min(cell_width, cell_height) / 2,
+                         sf::Color::Magenta);
+  }
 
   if (dmaze.show_solution) {
-    draw_path(dmaze.grid, window, dmaze.path);
+    draw_path(dmaze.grid, window, dmaze.path, center_of_cell);
   }
-  draw_path(dmaze.grid, window, dmaze.player_path, sf::Color::Blue);
+  draw_path(dmaze.grid, window, dmaze.player_path, center_of_cell,
+            sf::Color::Blue);
 
   // Labels
   static sf::Font font;
@@ -254,6 +235,139 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     text.setPosition(sf::Vector2f(800 / 2.0f, 600 / 2.0f));
     window.draw(text);
   }
+};
+
+void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
+  auto window_size = window.getSize();
+  const float cell_width = 800.0 / (2 * dmaze.grid.width_ + 2);
+  const float cell_height = 600.0 / (2 * dmaze.grid.height_ + 2);
+  const auto cell_size = std::min(cell_width, cell_height);
+  const auto line_color = sf::Color::Green;
+  const auto center_x = 400;
+  const auto center_y = 300;
+  constexpr double pi = 3.14159265358979323846;
+  const auto theta = 2 * pi / dmaze.grid.width_;
+
+  const auto cell_x_to_draw_x = [&](const auto cell) {
+    auto &[row, col] = cell;
+    const auto inner_radius = row * cell_size;
+    const auto theta_ccw = col * theta;
+    const float ax = center_x + (inner_radius * std::cos(theta_ccw));
+    return ax;
+  };
+  const auto cell_y_to_draw_y = [&](const auto cell) {
+    auto &[row, col] = cell;
+    const auto inner_radius = row * cell_size;
+    const auto theta_ccw = col * theta;
+    const float ay = center_y + (inner_radius * std::sin(theta_ccw));
+    return ay;
+  };
+  const auto center_of_cell = [&](const auto row, const auto col) {
+    //
+    return std::make_pair(
+        cell_x_to_draw_x(std::make_pair(row + 0.5f, col + 0.5f)),
+        cell_y_to_draw_y(std::make_pair(row + 0.5f, col + 0.5f)));
+  };
+  auto cell_polygon = [&](auto cell) -> CellPoly {
+    const auto inner_radius = cell.row * cell_size;
+    const auto outer_radius = (cell.row + 1) * cell_size;
+    const auto theta_ccw = cell.col * theta;
+    const auto theta_cw = (cell.col + 1) * theta;
+
+    const float ax = center_x + (inner_radius * std::cos(theta_ccw));
+    const float ay = center_y + (inner_radius * std::sin(theta_ccw));
+    const float bx = center_x + (outer_radius * std::cos(theta_ccw));
+    const float by = center_y + (outer_radius * std::sin(theta_ccw));
+    const float cx = center_x + (inner_radius * std::cos(theta_cw));
+    const float cy = center_y + (inner_radius * std::sin(theta_cw));
+    const float dx = center_x + (outer_radius * std::cos(theta_cw));
+    const float dy = center_y + (outer_radius * std::sin(theta_cw));
+
+    return {
+        .a = CellCorner{ax, ay},
+        .b = CellCorner{cx, cy},
+        .c = CellCorner{dx, dy},
+        .d = CellCorner{bx, by},
+        .i = CellCorner{cell_x_to_draw_x(
+                            std::make_pair(cell.row + 0.5f, cell.col + 0.5f)),
+                        cell_y_to_draw_y(
+                            std::make_pair(cell.row + 0.5f, cell.col + 0.5f))},
+    };
+  };
+
+  // Draw outer boundry
+  {
+    auto rad = cell_size * (dmaze.grid.height_);
+    sf::CircleShape shape(rad);
+    shape.setFillColor(sf::Color::Black);
+    shape.setOutlineColor(line_color);
+    shape.setOutlineThickness(1);
+    shape.setPosition(center_x - rad, center_y - rad);
+    window.draw(shape);
+  }
+
+  return draw_maze_common(window, dmaze, cell_polygon, center_of_cell,
+                          cell_width, cell_height);
+}
+
+void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
+  if (dmaze.polar_maze) {
+    return draw_polar_maze(window, dmaze);
+  }
+  auto window_size = window.getSize();
+  const float cell_width = 800.0 / (dmaze.grid.width_ + 2);
+  const float cell_height = 600.0 / (dmaze.grid.height_ + 2);
+  const auto line_color = sf::Color::Green;
+
+  const auto cell_x_to_draw_x = [&](const auto row) {
+    return cell_height * (row + 1);
+  };
+  const auto cell_y_to_draw_y = [&](const auto col) {
+    return cell_width * (col + 1);
+  };
+  const auto center_of_cell = [&](const auto row, const auto col) {
+    return std::make_pair(cell_y_to_draw_y(col + 0.5f),
+                          cell_x_to_draw_x(row + 0.5f));
+  };
+  auto cell_polygon = [&](auto cell) -> CellPoly {
+    const auto &[row, col] = cell;
+
+    return {
+        .a = CellCorner{cell_y_to_draw_y(col), cell_x_to_draw_x(row)},
+        .b = CellCorner{cell_y_to_draw_y(col + 1), cell_x_to_draw_x(row)},
+        .c = CellCorner{cell_y_to_draw_y(col + 1), cell_x_to_draw_x(row + 1)},
+        .d = CellCorner{cell_y_to_draw_y(col), cell_x_to_draw_x(row + 1)},
+        .i = CellCorner{cell_y_to_draw_y(col + 0.5f),
+                        cell_x_to_draw_x(row + 0.5f)},
+    };
+  };
+
+  // Draw top border
+  {
+    float x1 = cell_width * (0 + 1);
+
+    float y1 = cell_height * (0 + 1);
+    float y2 = cell_height * (dmaze.grid.height_ + 1);
+    sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
+                         sf::Vertex(sf::Vector2f(x1, y2), line_color)};
+
+    window.draw(line, 2, sf::Lines);
+  }
+
+  // Draw left border
+  {
+    float x1 = cell_width * (0 + 1);
+    float x2 = cell_width * (dmaze.grid.width_ + 1);
+
+    float y1 = cell_height * (0 + 1);
+    sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
+                         sf::Vertex(sf::Vector2f(x2, y1), line_color)};
+
+    window.draw(line, 2, sf::Lines);
+  }
+
+  return draw_maze_common(window, dmaze, cell_polygon, center_of_cell,
+                          cell_width, cell_height);
 }
 
 void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
@@ -323,6 +437,9 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
                             GeneratorRegistry::GetMazeGeneratorCount() - 1) %
                            GeneratorRegistry::GetMazeGeneratorCount();
               need_regen = true;
+              break;
+            case 'r':
+              dmaze->polar_maze = !dmaze->polar_maze;
               break;
             case 'p':
               fmt::print("{}\n", dmaze->grid);
