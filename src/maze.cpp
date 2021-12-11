@@ -1,12 +1,13 @@
+#include <fmt/chrono.h>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
 #include <deque>
 #include <experimental/mdspan>
-#include <fmt/chrono.h>
-#include <fmt/format.h>
-#include <fmt/ranges.h>
 #include <iostream>
 #include <mutex>
 #if defined(__GLIBCXX__)
@@ -27,6 +28,29 @@ namespace pstl = std;
 namespace stdex = std::experimental;
 
 namespace jt::maze {
+
+std::vector<size_t> calculate_variable_widths(size_t height) {
+  auto widths = ranges::views::iota(1, static_cast<int>(height)) |
+                ranges::views::partial_sum([height](auto acc, auto row) {
+                  const float row_height = 1.0 / height;
+                  const float rad = float(row) / height;
+                  const float circ = 2 * M_PI * rad;
+
+                  const auto estimated_cell_width = circ / acc;
+                  const auto ratio =
+                      std::round(estimated_cell_width / row_height);
+                  const int cells = acc * ratio;
+                  fmt::print("pi={}\n", M_PI);
+                  fmt::print("rad={}, rh={} circ={} height={}\n", rad,
+                             row_height, circ, height);
+                  fmt::print("acc={}, row={} ratio={} cells={}\n", acc, row,
+                             ratio, cells);
+                  return cells;
+                });
+  // Make a mask from these
+  fmt::print("widths: {}\n", widths);
+  return widths | ranges::to<std::vector<size_t>>;
+}
 
 std::vector<int> dijkstra_distances(const Grid &grid,
                                     CellCoordinate start_cell) {
@@ -126,10 +150,14 @@ bool operator==(const CellCoordinate &a, const CellCoordinate &b) {
   return a.row == b.row && a.col == b.col;
 }
 Grid::Grid(size_t width, size_t height)
-    : width_{width}, height_{height}, cells_{width * height},
-      mdspan_{cells_.data(), height_, width_}, rd{}, gen{rd()},
-      mask(width * height), mask_as_mdspan_{mask.data(), height_, width_} {
-
+    : width_{width},
+      height_{height},
+      cells_{width * height},
+      mdspan_{cells_.data(), height_, width_},
+      rd{},
+      gen{rd()},
+      mask(width * height),
+      mask_as_mdspan_{mask.data(), height_, width_} {
   auto m = as_mdspan();
   for (int row = 0; row < m.extent(0); row++) {
     m(row, m.extent(1) - 1).right = Wall::Boundry;
@@ -141,4 +169,4 @@ Grid::Grid(size_t width, size_t height)
 
 std::vector<GeneratorRegistry::RegistryConfig> GeneratorRegistry::registry_{};
 
-}; // namespace jt::maze
+};  // namespace jt::maze

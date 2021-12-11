@@ -1,12 +1,13 @@
+#include <fmt/chrono.h>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
 #include <deque>
 #include <experimental/mdspan>
-#include <fmt/chrono.h>
-#include <fmt/format.h>
-#include <fmt/ranges.h>
 #include <iostream>
 #include <mutex>
 #include <optional>
@@ -19,9 +20,12 @@
 namespace jt::maze {
 namespace stdex = std::experimental;
 
+std::vector<size_t> calculate_variable_widths(size_t height);
+
 // Not sure why ranges::front() is not working for my sampled ranges, but
 // this seems to do the trick.
-template <typename R> auto jt_range_front(R &&rng) {
+template <typename R>
+auto jt_range_front(R &&rng) {
   return (ranges::begin(rng) == ranges::end(rng))
              ? std::nullopt
              : std::make_optional(*ranges::begin(rng));
@@ -41,53 +45,34 @@ struct GridMask {
   std::vector<uint8_t> mask;
 };
 
-struct PolarGrid {
+struct PolarGridRepr {
+  // APIs
+  struct Cell {
+    struct Cell *inward;
+    struct Cell *cw, *ccw;
+    std::vector<struct Cell *> outward;
+  };
 
-  // APIs 
+  size_t radius_in_cells;                     // "height_"
+  std::vector<size_t> per_row_circumference;  // widths_
 
-  // theta        = 2 * Math::PI / cell_count
-  // inner_radius = cell.row * ring_height
-  // outer_radius = (cell.row + 1) * ring_height
-  // theta_ccw    = cell.col * theta
-  // theta_cw     = (cell.col + 1) * theta
+  std::vector<Cell> board;
+
+  static size_t board_cells(const std::vector<size_t> &widths) {
+    // return per_row_circumference.back() * height;  // TODO: Over commit, but largest row will be the last row
+    return ranges::accumulate(widths, 0);
+  }
+
+  PolarGridRepr(size_t height)
+      : radius_in_cells{height},
+        per_row_circumference(calculate_variable_widths(height)),
+        board(board_cells(per_row_circumference))
+  {}
 
   // auto cell_cw(Coordinate);
   // auto cell_ccw(Coordinate);
   // auto cell_inner(Coordinate);
   // auto cells_outter(Coordinate);
-  // Drawing fn from book:
-  // def to_png(cell_size: 10)
-  //     img_size = 2 * @rows * cell_size
-  //
-  //     background = ChunkyPNG::Color::WHITE
-  //     wall = ChunkyPNG::Color::BLACK
-  //
-  //     img = ChunkyPNG::Image.new(img_size + 1, img_size + 1, background)
-  //     center = img_size / 2
-  //
-  //     each_cell do |cell|
-  //       theta= 2 * Math::PI / @grid[cell.row].length
-  //       inner_radius= cell.row * cell_size
-  //       outer_radius= (cell.row + 1) * cell_size
-  //       theta_ccw= cell.column * theta
-  //       theta_cw= (cell.column + 1) * theta
-  //
-  //       ax = center + (inner_radius * Math.cos(theta_ccw)).to_i
-  //       ay = center + (inner_radius * Math.sin(theta_ccw)).to_i
-  //       bx = center + (outer_radius * Math.cos(theta_ccw)).to_i
-  //       by = center + (outer_radius * Math.sin(theta_ccw)).to_i
-  //       cx = center + (inner_radius * Math.cos(theta_cw)).to_i
-  //       cy = center + (inner_radius * Math.sin(theta_cw)).to_i
-  //       dx = center + (outer_radius * Math.cos(theta_cw)).to_i
-  //       dy = center + (outer_radius * Math.sin(theta_cw)).to_i
-  //
-  //       img.line(ax, ay, cx, cy, wall) unless cell.linked?(cell.north)
-  //       img.line(cx, cy, dx, dy, wall) unless cell.linked?(cell.east)
-  //    end
-  //    img.circle(center, center, @rows * cell_size, wall)
-  // img
-  // end
-  //
   //
   // def prepare_grid
   //    rows = Array.new(@rows)
@@ -110,12 +95,14 @@ struct PolarGrid {
   // end
 };
 
+struct CartesianGridRepr {};
+
 struct Grid {
   Grid(size_t width, size_t height);
   Grid(GridMask msk) : Grid(msk.width, msk.height) { mask = msk.mask; };
   size_t width_, height_;
 
-private:
+ private:
   // TODO: Get rid of "Cell" and use extra dimension in mdspan
   struct Cell {
     Wall down, right;
@@ -131,17 +118,10 @@ private:
                 stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
       mask_as_mdspan_;
 
-public:
+ public:
   std::mt19937 gen;
 
   auto as_mdspan() const { return mdspan_; }
-
-  auto &operator()(size_t row, size_t col) const
-  /*__attribute__((deprecated))*/ {
-    auto m = as_mdspan();
-    return m(row, col);
-  }
-
   auto &operator()(CellCoordinate cell) const {
     const auto &[row, col] = cell;
     auto m = as_mdspan();
@@ -229,8 +209,8 @@ public:
   }
 
   // Helpers for getting all connected neighbors
-  std::array<std::optional<CellCoordinate>, 4>
-  get_connected_neighbors_(CellCoordinate c) const {
+  std::array<std::optional<CellCoordinate>, 4> get_connected_neighbors_(
+      CellCoordinate c) const {
     return {
         connected_cell_north(c),
         connected_cell_east(c),
@@ -247,8 +227,8 @@ public:
   }
 
   // Helpers for getting all neighbors
-  std::array<std::optional<CellCoordinate>, 4>
-  get_all_neighbors_(CellCoordinate c) const {
+  std::array<std::optional<CellCoordinate>, 4> get_all_neighbors_(
+      CellCoordinate c) const {
     return {cell_north(c), cell_east(c), cell_south(c), cell_west(c)};
   }
 
@@ -355,7 +335,7 @@ std::vector<CellCoordinate> longest_path_(Grid &grid,
                                           std::vector<int> &distances);
 
 class GeneratorRegistry {
-public:
+ public:
   struct RegistryConfig {
     // RegistryConfig(RegistryConfig const &) = delete;
     // RegistryConfig(RegistryConfig&&) = delete;
@@ -399,12 +379,12 @@ public:
   }
   static size_t GetMazeGeneratorCount() { return registry_.size(); };
 
-private:
+ private:
   static std::vector<RegistryConfig> registry_;
 };
 
 void ensure_registry();
-}; // namespace jt::maze
+};  // namespace jt::maze
 
 ////////////////////////////////////////////////////////////////////////////////
 // Ascii output
@@ -420,16 +400,18 @@ static char v_wall_to_char(const jt::maze::Wall wall) {
                                          : 'X';
 }
 
-template <> struct fmt::formatter<jt::maze::CellCoordinate> {
-  template <typename ParseContext> constexpr auto parse(ParseContext &ctx);
+template <>
+struct fmt::formatter<jt::maze::CellCoordinate> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext &ctx);
 
   template <typename FormatContext>
   auto format(jt::maze::CellCoordinate const &coord, FormatContext &ctx);
 };
 
 template <typename ParseContext>
-constexpr auto
-fmt::formatter<jt::maze::CellCoordinate>::parse(ParseContext &ctx) {
+constexpr auto fmt::formatter<jt::maze::CellCoordinate>::parse(
+    ParseContext &ctx) {
   return ctx.begin();
 }
 
@@ -439,8 +421,10 @@ auto fmt::formatter<jt::maze::CellCoordinate>::format(
   return fmt::format_to(ctx.out(), "[{},{}]", coord.row, coord.col);
 }
 
-template <> struct fmt::formatter<jt::maze::Grid> {
-  template <typename ParseContext> constexpr auto parse(ParseContext &ctx);
+template <>
+struct fmt::formatter<jt::maze::Grid> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext &ctx);
 
   template <typename FormatContext>
   auto format(jt::maze::Grid const &grid, FormatContext &ctx);
@@ -464,16 +448,18 @@ auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
   }
   fmt::format_to(ctx.out(), "\n");
 
-  for (int row = 0; row < grid.height_; row++) {
+  for (size_t row = 0; row < grid.height_; row++) {
     // Draw verticals
-    for (int col = 0; col < grid.width_; col++) {
-      fmt::format_to(ctx.out(), "   {}", v_wall_to_char(grid(row, col).right));
+    for (size_t col = 0; col < grid.width_; col++) {
+      fmt::format_to(
+          ctx.out(), "   {}",
+          v_wall_to_char(grid(jt::maze::CellCoordinate{row, col}).right));
     }
     fmt::format_to(ctx.out(), "\n");
 
     // Draw horizantals
-    for (int col = 0; col < grid.width_; col++) {
-      auto c = h_wall_to_char(grid(row, col).down);
+    for (size_t col = 0; col < grid.width_; col++) {
+      auto c = h_wall_to_char(grid(jt::maze::CellCoordinate{row, col}).down);
       fmt::format_to(ctx.out(), "{}{}{}+", c, c, c);
     }
     fmt::format_to(ctx.out(), "\n");
