@@ -59,40 +59,26 @@ struct PolarGridRepr {
   std::vector<Cell> board;
 
   static size_t board_cells(const std::vector<size_t> &widths) {
-    // return per_row_circumference.back() * height;  // TODO: Over commit, but largest row will be the last row
+    // return per_row_circumference.back() * height;  // TODO: Over commit, but
+    // largest row will be the last row
     return ranges::accumulate(widths, 0);
   }
 
   PolarGridRepr(size_t height)
       : radius_in_cells{height},
         per_row_circumference(calculate_variable_widths(height)),
-        board(board_cells(per_row_circumference))
-  {}
+        board(board_cells(per_row_circumference)) {
+    prepare_board();
+  }
+
+  void prepare_board() {
+    // TODO: link cells to their neighbors
+  }
 
   // auto cell_cw(Coordinate);
   // auto cell_ccw(Coordinate);
   // auto cell_inner(Coordinate);
   // auto cells_outter(Coordinate);
-  //
-  // def prepare_grid
-  //    rows = Array.new(@rows)
-  //
-  //    row_height = 1.0 / @rows
-  //    rows[0] = [ PolarCell.new(0, 0) ]
-  //
-  //    (1...@rows).each do |row|
-  //        radius = row.to_f / @rows
-  //        circumference = 2 * Math::PI * radius
-  //
-  //        previous_count = rows[row - 1].length
-  //        estimated_cell_width = circumference / previous_count
-  //        ratio = (estimated_cell_width / row_height).round
-  //
-  //        cells = previous_count * ratio
-  //        rows[row] = Array.new(cells) { |col| PolarCell.new(row, col) }
-  //    end
-  // rows
-  // end
 };
 
 struct CartesianGridRepr {};
