@@ -557,9 +557,9 @@ int main(int argc, char **argv) {
   size_t width = result["width"].as<size_t>();
   size_t height = result["height"].as<size_t>();
 
-  //
-  auto w = calculate_variable_widths(height);
-  width = w.back();
+  // Calculate polar grid widths and set new width to max of that
+  // auto w = calculate_variable_widths(height);
+  // width = w.back();
 
   gui_usage();
 
@@ -575,17 +575,19 @@ int main(int argc, char **argv) {
   jt::maze::ensure_registry();
 
   msk.mask.resize(width * height);
-  for (auto p : ranges::views::enumerate(w)) {
-    auto &[r, c] = p;
-    stdex::mdspan<uint8_t,
-                  stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
-        m{msk.mask.data(), height, width};
-    // auto m = dmaze.grid.mask_as_mdspan();
-    for (auto cc : ranges::views::iota(int(c), int(width))) {
-      fmt::print("{} {}\n", r, cc);
-      m(r, cc) = 1;
-    }
-  }
+  // Mask out the polar part east of width
+  // for (auto p : ranges::views::enumerate(w)) {
+  //   auto &[r, c] = p;
+  //   stdex::mdspan<uint8_t,
+  //                 stdex::extents<stdex::dynamic_extent,
+  //                 stdex::dynamic_extent>>
+  //       m{msk.mask.data(), height, width};
+  //   // auto m = dmaze.grid.mask_as_mdspan();
+  //   for (auto cc : ranges::views::iota(int(c), int(width))) {
+  //     fmt::print("{} {}\n", r, cc);
+  //     m(r, cc) = 1;
+  //   }
+  // }
 
   gui_main(width, height, method_idx, msk);
 

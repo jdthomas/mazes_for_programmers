@@ -71,14 +71,17 @@ struct PolarGridRepr {
     prepare_board();
   }
 
-  void prepare_board() {
-    // TODO: link cells to their neighbors
-  }
+  void prepare_board() {}
 
   // auto cell_cw(Coordinate);
   // auto cell_ccw(Coordinate);
   // auto cell_inner(Coordinate);
   // auto cells_outter(Coordinate);
+  //
+  //
+  // auto get_all_neighbors();
+  // auto get_connected_neighbors();
+  // void link();
 };
 
 struct CartesianGridRepr {};
@@ -114,6 +117,8 @@ struct Grid {
     return m(row, col);
   }
 
+  bool allow_ew_wrap = true;
+
   // Helper to generate all CellCoordinate for each cell
   auto positions() const {
     return ranges::views::cartesian_product(
@@ -143,10 +148,15 @@ struct Grid {
                                              : std::make_optional(neighbor);
   }
   auto cell_east(CellCoordinate c) const {
-    auto neighbor = CellCoordinate{c.row, c.col + 1};
-    return c.col >= (width_ - 1) || masked_at(neighbor)
-               ? std::nullopt
-               : std::make_optional(neighbor);
+    if (!allow_ew_wrap) {
+      auto neighbor = CellCoordinate{c.row, c.col + 1};
+      return c.col >= (width_ - 1) || masked_at(neighbor)
+                 ? std::nullopt
+                 : std::make_optional(neighbor);
+    } else {
+      auto neighbor = CellCoordinate{c.row, (c.col + 1) % width_};
+      return masked_at(neighbor) ? std::nullopt : std::make_optional(neighbor);
+    }
   }
   auto cell_south(CellCoordinate c) const {
     auto neighbor = CellCoordinate{c.row + 1, c.col};
@@ -155,9 +165,14 @@ struct Grid {
                : std::make_optional(neighbor);
   }
   auto cell_west(CellCoordinate c) const {
-    auto neighbor = CellCoordinate{c.row, c.col - 1};
-    return c.col == 0 || masked_at(neighbor) ? std::nullopt
-                                             : std::make_optional(neighbor);
+    if (!allow_ew_wrap) {
+      auto neighbor = CellCoordinate{c.row, c.col - 1};
+      return c.col == 0 || masked_at(neighbor) ? std::nullopt
+                                               : std::make_optional(neighbor);
+    } else {
+      auto neighbor = CellCoordinate{c.row, (width_ + c.col - 1) % width_};
+      return masked_at(neighbor) ? std::nullopt : std::make_optional(neighbor);
+    }
   }
 
   // Helpers to get individual neighbors
@@ -252,10 +267,10 @@ struct Grid {
     //   throw std::runtime_error("Linking cells must be neighbors");
 
     auto m = as_mdspan();
-    if (dx == -1) {
-      m(row_1, col_1 - 1).right = Wall::Open;
+    if (dx == -1 || dx == width_ - 1) {
+      m(row_1, (width_ + col_1 - 1) % width_).right = Wall::Open;
       // fmt::print("Setting right of {} {}\n", col_1 - 1, row_1);
-    } else if (dx == 1) {
+    } else if (dx == 1 || dx == -width_ + 1) {
       m(row_1, col_1).right = Wall::Open;
       // fmt::print("Setting right of {} {}\n", col_1, row_1);
     } else if (dy == -1) {
@@ -264,6 +279,9 @@ struct Grid {
     } else if (dy == 1) {
       m(row_1, col_1).down = Wall::Open;
       // fmt::print("Setting down of {} {}\n", col_1, row_1);
+    } else {
+      throw std::runtime_error(
+          fmt::format("Bad neighbor: {} -> {}, dx={}", c1, c2, dx));
     }
   }
 
@@ -274,14 +292,17 @@ struct Grid {
   // Helper to check if a cell has no connections
   bool is_closed_cell(CellCoordinate c) const {
     auto m = as_mdspan();
-    return (c.row == 0 || m(c.row - 1, c.col).down != Wall::Open) &&
-           (c.row == height_ - 1 || m(c.row, c.col).down != Wall::Open) &&
-           (c.col == 0 || m(c.row, c.col - 1).right != Wall::Open) &&
-           (c.col == width_ - 1 || m(c.row, c.col).right != Wall::Open);
-    // auto tmp = get_connected_neighbors_(c);
-    // return ranges::accumulate(
-    //            tmp | ranges::views::transform([](auto o) { return o ? 1 : 0;
-    //            }), 0) == 0;
+    if (!allow_ew_wrap) {
+      return (c.row == 0 || m(c.row - 1, c.col).down != Wall::Open) &&
+             (c.row == height_ - 1 || m(c.row, c.col).down != Wall::Open) &&
+             (c.col == 0 || m(c.row, c.col - 1).right != Wall::Open) &&
+             (c.col == width_ - 1 || m(c.row, c.col).right != Wall::Open);
+    } else {
+      auto tmp = get_connected_neighbors_(c);
+      return ranges::accumulate(tmp | ranges::views::transform(
+                                          [](auto o) { return o ? 1 : 0; }),
+                                0) == 0;
+    }
   }
 
   // Helper to check if a cell is a dead end (has only one connecttion)

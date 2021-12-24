@@ -1,12 +1,13 @@
+#include <fmt/chrono.h>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
 #include <deque>
 #include <experimental/mdspan>
-#include <fmt/chrono.h>
-#include <fmt/format.h>
-#include <fmt/ranges.h>
 #include <iostream>
 #include <mutex>
 #if defined(__GLIBCXX__)
@@ -48,7 +49,6 @@ void binary_tree_maze(Grid &grid) {
 GeneratorRegistry::RegisterGenerator b('B', "BinaryTree", binary_tree_maze);
 
 void binary_tree_maze_p(Grid &grid) {
-
   std::bernoulli_distribution d(0.5);
   auto per_cell_action = [&](const auto &cell) {
     auto go_down = d(grid.gen);
@@ -258,5 +258,4 @@ void recursive_backtracking_maze(Grid &grid) {
 GeneratorRegistry::RegisterGenerator r('R', "RecursiveBacktracking",
                                        recursive_backtracking_maze);
 
-}; // namespace jt::maze
-
+};  // namespace jt::maze
