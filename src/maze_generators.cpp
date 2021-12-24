@@ -84,17 +84,13 @@ void binary_tree_maze_p2(Grid &grid) {
                                static_cast<size_t>(grid.height_));
   std::for_each(pstl::execution::par_unseq, r.begin(), r.end(),
                 [&](const auto &row) {
-                  for (size_t col = 0; col < grid.width_; col++) {
+                  for (size_t col = 0; col < grid.widths_.back(); col++) {
                     per_cell_action(CellCoordinate{row, col});
                   }
                 });
 }
 GeneratorRegistry::RegisterGenerator b3('D', "BinaryTree(Parallel - 2)",
                                         binary_tree_maze_p2);
-
-// TODO: There should be a version of binary_tree where we make the down/left
-// decision first then just link them. e.g. no need for condition in the hot
-// loops.
 
 //////////////////////////////////////////////////////////////////////////////
 // Sidewinder
@@ -106,7 +102,7 @@ void sidewinder_maze(Grid &grid) {
                                static_cast<size_t>(grid.height_));
   std::for_each(r.begin(), r.end(), [&grid, &d](const auto &row) {
     size_t run_start = 0;
-    for (size_t col = 0; col < grid.width_; col++) {
+    for (size_t col = 0; col < grid.widths_.back(); col++) {
       auto e = grid.cell_east({row, col});
       auto s = grid.cell_south({row, col});
       bool should_close = !e || (s && d(grid.gen));
@@ -132,7 +128,7 @@ void sidewinder_maze_p(Grid &grid) {
   std::for_each(pstl::execution::par_unseq, r.begin(), r.end(),
                 [&grid, &d](const auto &row) {
                   size_t run_start = 0;
-                  for (size_t col = 0; col < grid.width_; col++) {
+                  for (size_t col = 0; col < grid.widths_.back(); col++) {
                     auto e = grid.cell_east({row, col});
                     auto s = grid.cell_south({row, col});
                     bool should_close = !e || (s && d(grid.gen));
@@ -155,7 +151,7 @@ GeneratorRegistry::RegisterGenerator s2('s', "Sidewinder(Parallel - 1)",
 //////////////////////////////////////////////////////////////////////////////
 void random_walk_Aldous_Broder_maze(Grid &grid) {
   auto cell = grid.random_cell();
-  int unvisited = grid.width_ * grid.height_ - 1;
+  int unvisited = grid.widths_.back() * grid.height_ - 1;
   while (unvisited > 0) {
     auto neighbor = *grid.random_neighbor(cell);
 

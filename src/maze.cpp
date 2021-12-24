@@ -30,7 +30,7 @@ namespace stdex = std::experimental;
 namespace jt::maze {
 
 std::vector<size_t> calculate_variable_widths(size_t height) {
-  auto widths = ranges::views::iota(1, static_cast<int>(height)) |
+  auto widths = ranges::views::iota(1, static_cast<int>(height+1)) |
                 ranges::views::partial_sum([height](auto acc, auto row) {
                   const float row_height = 1.0 / height;
                   const float rad = float(row) / height;
@@ -58,10 +58,10 @@ std::vector<int> dijkstra_distances(const Grid &grid,
   q.push_back({start_cell, 1});
 
   fmt::print("Computing distances using dijkstra from {} \n", start_cell);
-  std::vector<int> distances(grid.width_ * grid.height_);
+  std::vector<int> distances(grid.widths_.back() * grid.height_);
   auto cell_distances = stdex::mdspan<
       int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
-      distances.data(), grid.height_, grid.width_);
+      distances.data(), grid.height_, grid.widths_.back());
 
   while (!q.empty()) {
     auto current = q.front();
@@ -84,13 +84,13 @@ std::tuple<CellCoordinate, int> furthest_cell(const Grid &grid,
                                               std::vector<int> &distances) {
   auto d = stdex::mdspan<
       int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
-      distances.data(), grid.height_, grid.width_);
+      distances.data(), grid.height_, grid.widths_.back());
   auto p = grid.positions();
   auto m = ranges::max_element(
       p, [](const auto &a, const auto &b) { return a < b; },
       [&](const auto &idx) {
         auto &[row, col] = idx;
-        assert(row < grid.height_ && col < grid.width_);
+        assert(row < grid.height_ && col < grid.widths_.back());
         return d(row, col);
       });
   auto [row, col] = *m;
@@ -101,7 +101,7 @@ std::vector<CellCoordinate> longest_path_(Grid &grid,
                                           std::vector<int> &distances) {
   auto [c, d1] = furthest_cell(grid, distances);
   fmt::print("longest path from: {}x{} to {} and spans {} steps \n",
-             grid.height_ / 2, grid.width_ / 2, c, d1);
+             grid.height_ / 2, grid.widths_.back() / 2, c, d1);
 
   auto new_distances = dijkstra_distances(grid, c);
   auto [goal, longest_path_dist] = furthest_cell(grid, new_distances);
@@ -113,7 +113,7 @@ std::vector<CellCoordinate> longest_path_(Grid &grid,
 
   auto d = stdex::mdspan<
       int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
-      new_distances.data(), grid.height_, grid.width_);
+      new_distances.data(), grid.height_, grid.widths_.back());
 
   std::vector<CellCoordinate> path;
   path.reserve(longest_path_dist);
@@ -150,14 +150,14 @@ bool operator==(const CellCoordinate &a, const CellCoordinate &b) {
   return a.row == b.row && a.col == b.col;
 }
 Grid::Grid(size_t width, size_t height)
-    : width_{width},
+    : widths_(height,width),
       height_{height},
       cells_{width * height},
-      mdspan_{cells_.data(), height_, width_},
+      mdspan_{cells_.data(), height_, widths_.back()},
       rd{},
       gen{rd()},
       mask(width * height),
-      mask_as_mdspan_{mask.data(), height_, width_} {
+      mask_as_mdspan_{mask.data(), height_, widths_.back()} {
   auto m = as_mdspan();
   for (int row = 0; row < m.extent(0); row++) {
     m(row, m.extent(1) - 1).right = Wall::Boundry;

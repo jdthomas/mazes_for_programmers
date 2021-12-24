@@ -89,7 +89,8 @@ struct CartesianGridRepr {};
 struct Grid {
   Grid(size_t width, size_t height);
   Grid(GridMask msk) : Grid(msk.width, msk.height) { mask = msk.mask; };
-  size_t width_, height_;
+  size_t height_;
+  std::vector<size_t> widths_;
 
  private:
   // TODO: Get rid of "Cell" and use extra dimension in mdspan
@@ -125,7 +126,7 @@ struct Grid {
                ranges::views::iota(static_cast<size_t>(0),
                                    static_cast<size_t>(height_)),
                ranges::views::iota(static_cast<size_t>(0),
-                                   static_cast<size_t>(width_))) |
+                                   static_cast<size_t>(widths_.back()))) |
            ranges::views::transform([](const auto &p) {
              const auto &[row, col] = p;
              return CellCoordinate{row, col};
@@ -150,11 +151,11 @@ struct Grid {
   auto cell_east(CellCoordinate c) const {
     if (!allow_ew_wrap) {
       auto neighbor = CellCoordinate{c.row, c.col + 1};
-      return c.col >= (width_ - 1) || masked_at(neighbor)
+      return c.col >= (widths_[c.row] - 1) || masked_at(neighbor)
                  ? std::nullopt
                  : std::make_optional(neighbor);
     } else {
-      auto neighbor = CellCoordinate{c.row, (c.col + 1) % width_};
+      auto neighbor = CellCoordinate{c.row, (c.col + 1) % widths_[c.row]};
       return masked_at(neighbor) ? std::nullopt : std::make_optional(neighbor);
     }
   }
@@ -170,7 +171,7 @@ struct Grid {
       return c.col == 0 || masked_at(neighbor) ? std::nullopt
                                                : std::make_optional(neighbor);
     } else {
-      auto neighbor = CellCoordinate{c.row, (width_ + c.col - 1) % width_};
+      auto neighbor = CellCoordinate{c.row, (widths_[c.row] + c.col - 1) % widths_[c.row]};
       return masked_at(neighbor) ? std::nullopt : std::make_optional(neighbor);
     }
   }
@@ -199,7 +200,7 @@ struct Grid {
 
   // Generate a random CellCoordinate within the grid
   auto random_cell() {
-    std::uniform_int_distribution<> d_w(0, width_ - 1);
+    std::uniform_int_distribution<> d_w(0, widths_.back() - 1);
     std::uniform_int_distribution<> d_h(0, height_ - 1);
     CellCoordinate c;
     do {
@@ -267,10 +268,10 @@ struct Grid {
     //   throw std::runtime_error("Linking cells must be neighbors");
 
     auto m = as_mdspan();
-    if (dx == -1 || dx == width_ - 1) {
-      m(row_1, (width_ + col_1 - 1) % width_).right = Wall::Open;
+    if (dx == -1 || dx == widths_[row_1] - 1) {
+      m(row_1, (widths_[row_1] + col_1 - 1) % widths_[row_1]).right = Wall::Open;
       // fmt::print("Setting right of {} {}\n", col_1 - 1, row_1);
-    } else if (dx == 1 || dx == -width_ + 1) {
+    } else if (dx == 1 || dx == -widths_[row_1] + 1) {
       m(row_1, col_1).right = Wall::Open;
       // fmt::print("Setting right of {} {}\n", col_1, row_1);
     } else if (dy == -1) {
@@ -287,7 +288,7 @@ struct Grid {
 
   bool is_boundry_cell(CellCoordinate c) {
     return c.row == 0 || c.col == 0 || c.row == height_ - 1 ||
-           c.col == width_ - 1;
+           c.col == widths_[c.row] - 1;
   }
   // Helper to check if a cell has no connections
   bool is_closed_cell(CellCoordinate c) const {
@@ -296,7 +297,7 @@ struct Grid {
       return (c.row == 0 || m(c.row - 1, c.col).down != Wall::Open) &&
              (c.row == height_ - 1 || m(c.row, c.col).down != Wall::Open) &&
              (c.col == 0 || m(c.row, c.col - 1).right != Wall::Open) &&
-             (c.col == width_ - 1 || m(c.row, c.col).right != Wall::Open);
+             (c.col == widths_[c.row] - 1 || m(c.row, c.col).right != Wall::Open);
     } else {
       auto tmp = get_connected_neighbors_(c);
       return ranges::accumulate(tmp | ranges::views::transform(
@@ -445,11 +446,11 @@ constexpr auto fmt::formatter<jt::maze::Grid>::parse(ParseContext &ctx) {
 template <typename FormatContext>
 auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
                                             FormatContext &ctx) {
-  if (grid.width_ > 200 / 4) {
+  if (grid.widths_.back() > 200 / 4) {
     return fmt::format_to(ctx.out(), "Maze too big for console!");
   }
   // Draw an initial boundry
-  for (int col = 0; col < grid.width_; col++) {
+  for (int col = 0; col < grid.widths_.back(); col++) {
     auto c = h_wall_to_char(jt::maze::Wall::Boundry);
     fmt::format_to(ctx.out(), "{}{}{}+", c, c, c);
   }
@@ -457,7 +458,7 @@ auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
 
   for (size_t row = 0; row < grid.height_; row++) {
     // Draw verticals
-    for (size_t col = 0; col < grid.width_; col++) {
+    for (size_t col = 0; col < grid.widths_.back(); col++) {
       fmt::format_to(
           ctx.out(), "   {}",
           v_wall_to_char(grid(jt::maze::CellCoordinate{row, col}).right));
@@ -465,12 +466,12 @@ auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
     fmt::format_to(ctx.out(), "\n");
 
     // Draw horizantals
-    for (size_t col = 0; col < grid.width_; col++) {
+    for (size_t col = 0; col < grid.widths_.back(); col++) {
       auto c = h_wall_to_char(grid(jt::maze::CellCoordinate{row, col}).down);
       fmt::format_to(ctx.out(), "{}{}{}+", c, c, c);
     }
     fmt::format_to(ctx.out(), "\n");
   }
 
-  return fmt::format_to(ctx.out(), "... {} x {}\n", grid.width_, grid.height_);
+  return fmt::format_to(ctx.out(), "... {} x {}\n", grid.widths_.back(), grid.height_);
 }

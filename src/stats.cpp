@@ -50,8 +50,8 @@ int main(int argc, char **argv) {
     averages[m.name] =
         float(ranges::accumulate(dead_count, 0)) / dead_count.size();
   }
-  auto cell_count = grid.width_ * grid.height_;
-  fmt::print("Average dead-ends per {}x#{} maze ({} cells):\n", grid.width_,
+  auto cell_count = grid.widths_.back() * grid.height_;
+  fmt::print("Average dead-ends per {}x#{} maze ({} cells):\n", grid.widths_.back(),
              grid.height_, cell_count);
 
   std::vector<std::pair<std::string, float>> sorted_avgs;

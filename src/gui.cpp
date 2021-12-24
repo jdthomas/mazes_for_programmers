@@ -52,8 +52,9 @@ struct DrawableMaze {
     method.generate(grid);
     auto t2 = high_resolution_clock::now();
 
+    grid.widths_ = calculate_variable_widths(grid.height_);
     CellCoordinate start_pos =
-        grid.random_cell();  // {grid.width_ / 2, grid.height_ / 2};
+        grid.random_cell();  // {grid.widths_.back() / 2, grid.height_ / 2};
     distances = dijkstra_distances(grid, start_pos);
     path = longest_path_(grid, distances);
     method_name = method.name;
@@ -73,7 +74,7 @@ struct DrawableMaze {
     colorizer = [this](auto &g, auto c, auto r) {
       auto d = stdex::mdspan<
           int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
-          this->distances.data(), this->grid.height_, this->grid.width_);
+          this->distances.data(), this->grid.height_, this->grid.widths_.back());
       int shade = 255 * d(c, r) / this->max_path_len;
       return sf::Color(shade, shade, shade);
     };
@@ -114,7 +115,7 @@ auto draw_path = [](const Grid &grid, sf::RenderWindow &window,
       },
       [center_of_cell, line_color, &grid](auto pos) {
         auto &[row, col] = pos;
-        assert(row < grid.height_ && col < grid.width_);
+        assert(row < grid.height_ && col < grid.widths_.back());
         auto draw_pos = center_of_cell(row, col);
         return sf::Vertex(sf::Vector2f(draw_pos.first, draw_pos.second),
                           line_color);
@@ -247,7 +248,7 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   const auto center_x = 400;
   const auto center_y = 300;
   constexpr double pi = M_PI;
-  const auto theta = 2 * pi / dmaze.grid.width_;
+  const auto theta = 2 * pi / dmaze.grid.widths_.back();
 
   const auto cell_x_to_draw_x = [&](const auto cell) {
     auto &[row, col] = cell;
@@ -313,7 +314,7 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
 
 void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   auto window_size = window.getSize();
-  const float cell_width = 800.0 / (dmaze.grid.width_ + 2);
+  const float cell_width = 800.0 / (dmaze.grid.widths_.back() + 2);
   const float cell_height = 600.0 / (dmaze.grid.height_ + 2);
   const auto line_color = sf::Color::Green;
 
@@ -355,7 +356,7 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   // Draw left border
   {
     float x1 = cell_width * (0 + 1);
-    float x2 = cell_width * (dmaze.grid.width_ + 1);
+    float x2 = cell_width * (dmaze.grid.widths_.back() + 1);
 
     float y1 = cell_height * (0 + 1);
     sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
@@ -544,7 +545,7 @@ int main(int argc, char **argv) {
     ("v,height", "width of maze to generate", cxxopts::value<size_t>()->default_value("10"))
     ("m,mask", "File name", cxxopts::value<std::string>())
     ("i,invert", "Invert the mask",  cxxopts::value<bool>()->default_value("false"))
-    ("d,method", "Name of generation method",  cxxopts::value<std::string>()->default_value("B"))
+    ("d,method", "Name of generation method",  cxxopts::value<std::string>()->default_value("R"))
     ("h,help", "Print usage")
     ;
   // clang-format on
@@ -558,8 +559,8 @@ int main(int argc, char **argv) {
   size_t height = result["height"].as<size_t>();
 
   // Calculate polar grid widths and set new width to max of that
-  // auto w = calculate_variable_widths(height);
-  // width = w.back();
+  auto w = calculate_variable_widths(height);
+  width = w.back();
 
   gui_usage();
 
@@ -576,18 +577,18 @@ int main(int argc, char **argv) {
 
   msk.mask.resize(width * height);
   // Mask out the polar part east of width
-  // for (auto p : ranges::views::enumerate(w)) {
-  //   auto &[r, c] = p;
-  //   stdex::mdspan<uint8_t,
-  //                 stdex::extents<stdex::dynamic_extent,
-  //                 stdex::dynamic_extent>>
-  //       m{msk.mask.data(), height, width};
-  //   // auto m = dmaze.grid.mask_as_mdspan();
-  //   for (auto cc : ranges::views::iota(int(c), int(width))) {
-  //     fmt::print("{} {}\n", r, cc);
-  //     m(r, cc) = 1;
-  //   }
-  // }
+  for (auto p : ranges::views::enumerate(w)) {
+    auto &[r, c] = p;
+    stdex::mdspan<uint8_t,
+                  stdex::extents<stdex::dynamic_extent,
+                  stdex::dynamic_extent>>
+        m{msk.mask.data(), height, width};
+    // auto m = dmaze.grid.mask_as_mdspan();
+    for (auto cc : ranges::views::iota(int(c), int(width))) {
+      fmt::print("{} {}\n", r, cc);
+      m(r, cc) = 1;
+    }
+  }
 
   gui_main(width, height, method_idx, msk);
 
