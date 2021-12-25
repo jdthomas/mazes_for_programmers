@@ -35,6 +35,8 @@ using namespace jt::maze;
 // GUI output
 ////////////////////////////////////////////////////////////////////////////////
 
+bool use_polar_widths = false;
+
 struct DrawableMaze {
   DrawableMaze(GridMask msk, const GeneratorRegistry::RegistryConfig &method)
       : grid{msk} {
@@ -52,7 +54,9 @@ struct DrawableMaze {
     method.generate(grid);
     auto t2 = high_resolution_clock::now();
 
-    grid.widths_ = calculate_variable_widths(grid.height_);
+    if (use_polar_widths) {
+      grid.widths_ = calculate_variable_widths(grid.height_);
+    }
     CellCoordinate start_pos =
         grid.random_cell();  // {grid.widths_.back() / 2, grid.height_ / 2};
     distances = dijkstra_distances(grid, start_pos);
@@ -74,7 +78,8 @@ struct DrawableMaze {
     colorizer = [this](auto &g, auto c, auto r) {
       auto d = stdex::mdspan<
           int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
-          this->distances.data(), this->grid.height_, this->grid.widths_.back());
+          this->distances.data(), this->grid.height_,
+          this->grid.widths_.back());
       int shade = 255 * d(c, r) / this->max_path_len;
       return sf::Color(shade, shade, shade);
     };
@@ -140,6 +145,28 @@ struct CellPoly {
   // a ----- b
   //     i   |
   // d ----- c
+  //
+  // Without inset
+  // x1                 x4
+  // +---+----------+---+ y1
+  // |                  |
+  // +                  +
+  // :         i        :
+  // +                  +
+  // |                  |
+  // +---+----------+---+ y4
+  //
+  // With Inset:
+  // x1  x2         x3  x4
+  // +---+----------+---+ y1
+  // |   |          |   |
+  // +   +          +   + y2
+  // :   :     i    :   :
+  // +   +          +   + y3
+  // |   |          |   |
+  // +---+----------+---+ y4
+  float x1, x2, x3, x4;
+  float y1, y2, y3, y4;
 };
 
 auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
@@ -164,19 +191,86 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
   for (const auto &cell : dmaze.grid.positions()) {
     auto corners = cell_polygon(cell);
     if (!dmaze.grid.connected_cell_east(cell)) {
+      // sf::Vertex line[] = {
+      //     sf::Vertex(sf::Vector2f(corners.b.x, corners.b.y), line_color),
+      //     sf::Vertex(sf::Vector2f(corners.c.x, corners.c.y), line_color)};
+
+      // window.draw(line, 2, sf::Lines);
       sf::Vertex line[] = {
-          sf::Vertex(sf::Vector2f(corners.b.x, corners.b.y), line_color),
-          sf::Vertex(sf::Vector2f(corners.c.x, corners.c.y), line_color)};
+          sf::Vertex(sf::Vector2f(corners.x3, corners.y2), line_color),
+          sf::Vertex(sf::Vector2f(corners.x3, corners.y3), line_color)};
 
       window.draw(line, 2, sf::Lines);
+    } else {
+      sf::Vertex line1[] = {
+          sf::Vertex(sf::Vector2f(corners.x3, corners.y2), line_color),
+          sf::Vertex(sf::Vector2f(corners.x4, corners.y2), line_color)};
+      sf::Vertex line2[] = {
+          sf::Vertex(sf::Vector2f(corners.x3, corners.y3), line_color),
+          sf::Vertex(sf::Vector2f(corners.x4, corners.y3), line_color)};
+
+      window.draw(line1, 2, sf::Lines);
+      window.draw(line2, 2, sf::Lines);
     }
     if (!dmaze.grid.connected_cell_south(cell)) {
+      // sf::Vertex line[] = {
+      //     sf::Vertex(sf::Vector2f(corners.d.x, corners.d.y), line_color),
+      //     sf::Vertex(sf::Vector2f(corners.c.x, corners.c.y), line_color)};
+
+      // window.draw(line, 2, sf::Lines);
       sf::Vertex line[] = {
-          sf::Vertex(sf::Vector2f(corners.d.x, corners.d.y), line_color),
-          sf::Vertex(sf::Vector2f(corners.c.x, corners.c.y), line_color)};
+          sf::Vertex(sf::Vector2f(corners.x2, corners.y3), line_color),
+          sf::Vertex(sf::Vector2f(corners.x3, corners.y3), line_color)};
 
       window.draw(line, 2, sf::Lines);
+    } else {
+      sf::Vertex line1[] = {
+          sf::Vertex(sf::Vector2f(corners.x2, corners.y3), line_color),
+          sf::Vertex(sf::Vector2f(corners.x2, corners.y4), line_color)};
+      sf::Vertex line2[] = {
+          sf::Vertex(sf::Vector2f(corners.x3, corners.y3), line_color),
+          sf::Vertex(sf::Vector2f(corners.x3, corners.y4), line_color)};
+
+      window.draw(line1, 2, sf::Lines);
+      window.draw(line2, 2, sf::Lines);
     }
+
+    if (!dmaze.grid.connected_cell_north(cell)) {
+      sf::Vertex line[] = {
+          sf::Vertex(sf::Vector2f(corners.x2, corners.y2), line_color),
+          sf::Vertex(sf::Vector2f(corners.x3, corners.y2), line_color)};
+
+      window.draw(line, 2, sf::Lines);
+    } else {
+      sf::Vertex line1[] = {
+          sf::Vertex(sf::Vector2f(corners.x2, corners.y1), line_color),
+          sf::Vertex(sf::Vector2f(corners.x2, corners.y2), line_color)};
+      sf::Vertex line2[] = {
+          sf::Vertex(sf::Vector2f(corners.x3, corners.y1), line_color),
+          sf::Vertex(sf::Vector2f(corners.x3, corners.y2), line_color)};
+
+      window.draw(line1, 2, sf::Lines);
+      window.draw(line2, 2, sf::Lines);
+    }
+
+    if (!dmaze.grid.connected_cell_west(cell)) {
+      sf::Vertex line[] = {
+          sf::Vertex(sf::Vector2f(corners.x2, corners.y2), line_color),
+          sf::Vertex(sf::Vector2f(corners.x2, corners.y3), line_color)};
+
+      window.draw(line, 2, sf::Lines);
+    } else {
+      sf::Vertex line1[] = {
+          sf::Vertex(sf::Vector2f(corners.x1, corners.y2), line_color),
+          sf::Vertex(sf::Vector2f(corners.x2, corners.y2), line_color)};
+      sf::Vertex line2[] = {
+          sf::Vertex(sf::Vector2f(corners.x1, corners.y3), line_color),
+          sf::Vertex(sf::Vector2f(corners.x2, corners.y3), line_color)};
+
+      window.draw(line1, 2, sf::Lines);
+      window.draw(line2, 2, sf::Lines);
+    }
+
     // if(dmaze.grid.masked_at(cell))
     // {
     //   sf::CircleShape shape((std::min(cell_width, cell_height) / 2) * 0.8);
@@ -248,19 +342,19 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   const auto center_x = 400;
   const auto center_y = 300;
   constexpr double pi = M_PI;
-  const auto theta = 2 * pi / dmaze.grid.widths_.back();
+  const auto theta = [&](auto row) { return 2 * pi / dmaze.grid.widths_[row]; };
 
   const auto cell_x_to_draw_x = [&](const auto cell) {
     auto &[row, col] = cell;
     const auto inner_radius = row * cell_size;
-    const auto theta_ccw = col * theta;
+    const auto theta_ccw = col * theta(row);
     const float ax = center_x + (inner_radius * std::cos(theta_ccw));
     return ax;
   };
   const auto cell_y_to_draw_y = [&](const auto cell) {
     auto &[row, col] = cell;
     const auto inner_radius = row * cell_size;
-    const auto theta_ccw = col * theta;
+    const auto theta_ccw = col * theta(row);
     const float ay = center_y + (inner_radius * std::sin(theta_ccw));
     return ay;
   };
@@ -273,8 +367,8 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   auto cell_polygon = [&](auto cell) -> CellPoly {
     const auto inner_radius = cell.row * cell_size;
     const auto outer_radius = (cell.row + 1) * cell_size;
-    const auto theta_ccw = cell.col * theta;
-    const auto theta_cw = (cell.col + 1) * theta;
+    const auto theta_ccw = cell.col * theta(cell.row);
+    const auto theta_cw = (cell.col + 1) * theta(cell.row);
 
     const float ax = center_x + (inner_radius * std::cos(theta_ccw));
     const float ay = center_y + (inner_radius * std::sin(theta_ccw));
@@ -294,6 +388,14 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
                             std::make_pair(cell.row + 0.5f, cell.col + 0.5f)),
                         cell_y_to_draw_y(
                             std::make_pair(cell.row + 0.5f, cell.col + 0.5f))},
+        .x1 = ax,
+        .x2 = 0.0,
+        .x3 = 0.0,
+        .x4 = cx,
+        .y1 = ay,
+        .y2 = 0.0,
+        .y3 = 0.0,
+        .y4 = cy,
     };
   };
 
@@ -317,6 +419,9 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   const float cell_width = 800.0 / (dmaze.grid.widths_.back() + 2);
   const float cell_height = 600.0 / (dmaze.grid.height_ + 2);
   const auto line_color = sf::Color::Green;
+  const auto inset = 0.1f;
+  const auto inset_x = inset * cell_width;
+  const auto inset_y = inset * cell_height;
 
   const auto cell_x_to_draw_x = [&](const auto row) {
     return cell_height * (row + 1);
@@ -338,32 +443,40 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
         .d = CellCorner{cell_y_to_draw_y(col), cell_x_to_draw_x(row + 1)},
         .i = CellCorner{cell_y_to_draw_y(col + 0.5f),
                         cell_x_to_draw_x(row + 0.5f)},
+        .y1 = cell_x_to_draw_x(row),
+        .y2 = cell_x_to_draw_x(row) + inset_x,
+        .y3 = cell_x_to_draw_x(row + 1) - inset_x,
+        .y4 = cell_x_to_draw_x(row + 1),
+        .x1 = cell_y_to_draw_y(col),
+        .x2 = cell_y_to_draw_y(col) + inset_y,
+        .x3 = cell_y_to_draw_y(col + 1) - inset_y,
+        .x4 = cell_y_to_draw_y(col + 1),
     };
   };
 
-  // Draw top border
-  {
-    float x1 = cell_width * (0 + 1);
+  //// Draw top border
+  //{
+  //  float x1 = cell_width * (0 + 1);
 
-    float y1 = cell_height * (0 + 1);
-    float y2 = cell_height * (dmaze.grid.height_ + 1);
-    sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
-                         sf::Vertex(sf::Vector2f(x1, y2), line_color)};
+  //  float y1 = cell_height * (0 + 1);
+  //  float y2 = cell_height * (dmaze.grid.height_ + 1);
+  //  sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
+  //                       sf::Vertex(sf::Vector2f(x1, y2), line_color)};
 
-    window.draw(line, 2, sf::Lines);
-  }
+  //  window.draw(line, 2, sf::Lines);
+  //}
 
-  // Draw left border
-  {
-    float x1 = cell_width * (0 + 1);
-    float x2 = cell_width * (dmaze.grid.widths_.back() + 1);
+  //// Draw left border
+  //{
+  //  float x1 = cell_width * (0 + 1);
+  //  float x2 = cell_width * (dmaze.grid.widths_.back() + 1);
 
-    float y1 = cell_height * (0 + 1);
-    sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
-                         sf::Vertex(sf::Vector2f(x2, y1), line_color)};
+  //  float y1 = cell_height * (0 + 1);
+  //  sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
+  //                       sf::Vertex(sf::Vector2f(x2, y1), line_color)};
 
-    window.draw(line, 2, sf::Lines);
-  }
+  //  window.draw(line, 2, sf::Lines);
+  //}
 
   return draw_maze_common(window, dmaze, cell_polygon, center_of_cell,
                           cell_width, cell_height);
@@ -560,7 +673,9 @@ int main(int argc, char **argv) {
 
   // Calculate polar grid widths and set new width to max of that
   auto w = calculate_variable_widths(height);
-  width = w.back();
+  if (use_polar_widths) {
+    width = w.back();
+  }
 
   gui_usage();
 
@@ -577,16 +692,17 @@ int main(int argc, char **argv) {
 
   msk.mask.resize(width * height);
   // Mask out the polar part east of width
-  for (auto p : ranges::views::enumerate(w)) {
-    auto &[r, c] = p;
-    stdex::mdspan<uint8_t,
-                  stdex::extents<stdex::dynamic_extent,
-                  stdex::dynamic_extent>>
-        m{msk.mask.data(), height, width};
-    // auto m = dmaze.grid.mask_as_mdspan();
-    for (auto cc : ranges::views::iota(int(c), int(width))) {
-      fmt::print("{} {}\n", r, cc);
-      m(r, cc) = 1;
+  if (use_polar_widths) {
+    for (auto p : ranges::views::enumerate(w)) {
+      auto &[r, c] = p;
+      stdex::mdspan<
+          uint8_t, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
+          m{msk.mask.data(), height, width};
+      // auto m = dmaze.grid.mask_as_mdspan();
+      for (auto cc : ranges::views::iota(int(c), int(width))) {
+        fmt::print("{} {}\n", r, cc);
+        m(r, cc) = 1;
+      }
     }
   }
 
