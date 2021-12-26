@@ -38,8 +38,10 @@ using namespace jt::maze;
 bool use_polar_widths = false;
 
 struct DrawableMaze {
-  DrawableMaze(GridMask msk, const GeneratorRegistry::RegistryConfig &method)
+  DrawableMaze(GridMask msk, const GeneratorRegistry::RegistryConfig &method,
+               bool wrap_ew)
       : grid{msk} {
+    grid.allow_ew_wrap = wrap_ew;
     init(method);
   }
   DrawableMaze(size_t width, size_t height,
@@ -103,6 +105,7 @@ struct DrawableMaze {
   bool show_solution = false;
   bool polar_maze = false;
   std::vector<CellCoordinate> player_path{};
+  bool show_inset = false;
 };
 
 auto draw_path = [](const Grid &grid, sf::RenderWindow &window,
@@ -137,14 +140,25 @@ void draw_circle_centered(sf::RenderWindow &window,
 }
 
 struct CellCorner {
+  CellCorner(float xx, float yy) : x{xx}, y{yy} {};
   float x, y;
+};
+struct CellSegment {
+  CellCorner a, b;
+  explicit CellSegment(float x1, float y1, float x2, float y2)
+      : a{x1, y1}, b{x2, y2} {};
 };
 struct CellPoly {
   // cornders from top left clockwise...
-  CellCorner a, b, c, d, i;
-  // a ----- b
-  //     i   |
-  // d ----- c
+  // CellCorner a, b, c, d;
+  CellCorner i;
+  std::vector<CellCorner> fill_poly;
+  std::vector<CellSegment> segments;
+  // a --------- b
+  //   A ----- B |
+  //       i   | |
+  //   D ----- C |
+  // d --------- c
   //
   // Without inset
   // x1                 x4
@@ -165,8 +179,92 @@ struct CellPoly {
   // +   +          +   + y3
   // |   |          |   |
   // +---+----------+---+ y4
-  float x1, x2, x3, x4;
-  float y1, y2, y3, y4;
+};
+
+// This takes a cell and returns the line segments to traw in "cell space" e.g.
+// against a grid of 1x1 cells.
+auto square_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
+  const auto inset = 0.1f;
+  const auto &[row, col] = cell;
+  const float y1 = row;
+  const float y2 = row + inset;
+  const float y3 = row + 1 - inset;
+  const float y4 = row + 1;
+  const float x1 = col;
+  const float x2 = col + inset;
+  const float x3 = col + 1 - inset;
+  const float x4 = col + 1;
+  std::vector<CellSegment> segments;
+  std::vector<CellCorner> fill_poly;
+  if (!dmaze.show_inset) {
+    if (!dmaze.grid.connected_cell_north(cell)) {
+      segments.emplace_back(x1, y1, x4, y1);
+    }
+    if (!dmaze.grid.connected_cell_east(cell)) {
+      segments.emplace_back(x4, y1, x4, y4);
+    }
+    if (!dmaze.grid.connected_cell_south(cell)) {
+      segments.emplace_back(x1, y4, x4, y4);
+    }
+    if (!dmaze.grid.connected_cell_west(cell)) {
+      segments.emplace_back(x1, y1, x1, y4);
+    }
+    fill_poly.emplace_back(x1, y1);
+    fill_poly.emplace_back(x1, y4);
+    fill_poly.emplace_back(x4, y4);
+    fill_poly.emplace_back(x4, y1);
+    fill_poly.emplace_back(x1, y1);
+  } else {
+    if (!dmaze.grid.connected_cell_north(cell)) {
+      segments.emplace_back(x2, y2, x3, y2);
+    } else {
+      segments.emplace_back(x2, y1, x2, y2);
+      segments.emplace_back(x3, y1, x3, y2);
+    }
+
+    if (!dmaze.grid.connected_cell_east(cell)) {
+      segments.emplace_back(x3, y2, x3, y3);
+    } else {
+      segments.emplace_back(x3, y2, x4, y2);
+      segments.emplace_back(x3, y3, x4, y3);
+    }
+
+    if (!dmaze.grid.connected_cell_south(cell)) {
+      segments.emplace_back(x2, y3, x3, y3);
+    } else {
+      segments.emplace_back(x2, y3, x2, y4);
+      segments.emplace_back(x3, y3, x3, y4);
+    }
+
+    if (!dmaze.grid.connected_cell_west(cell)) {
+      segments.emplace_back(x2, y2, x2, y3);
+    } else {
+      segments.emplace_back(x1, y2, x2, y2);
+      segments.emplace_back(x1, y3, x2, y3);
+    }
+    //
+    fill_poly.emplace_back(x2, y2);
+    if (dmaze.grid.connected_cell_north(cell)) {
+      fill_poly.emplace_back(x2, y1);
+      fill_poly.emplace_back(x3, y1);
+    }
+    fill_poly.emplace_back(x3, y2);
+    if (dmaze.grid.connected_cell_east(cell)) {
+      fill_poly.emplace_back(x4, y2);
+      fill_poly.emplace_back(x4, y3);
+    }
+    fill_poly.emplace_back(x3, y3);
+    if (dmaze.grid.connected_cell_south(cell)) {
+      fill_poly.emplace_back(x3, y4);
+      fill_poly.emplace_back(x2, y4);
+    }
+    fill_poly.emplace_back(x2, y3);
+    if (dmaze.grid.connected_cell_west(cell)) {
+      fill_poly.emplace_back(x1, y3);
+      fill_poly.emplace_back(x1, y2);
+    }
+  }
+  return std::make_pair(fill_poly, segments);
 };
 
 auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
@@ -177,12 +275,13 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
     for (const auto &cell : dmaze.grid.positions()) {
       auto corners = cell_polygon(cell);
       sf::ConvexShape polygon;
-      polygon.setPointCount(4);
-      polygon.setPoint(0, sf::Vector2f(corners.a.x, corners.a.y));
-      polygon.setPoint(1, sf::Vector2f(corners.b.x, corners.b.y));
-      polygon.setPoint(2, sf::Vector2f(corners.c.x, corners.c.y));
-      polygon.setPoint(3, sf::Vector2f(corners.d.x, corners.d.y));
       polygon.setFillColor(dmaze.colorizer(dmaze.grid, cell.row, cell.col));
+
+      polygon.setPointCount(corners.fill_poly.size());
+      for (const auto &[pt_ct, pt] :
+           ranges::views::enumerate(corners.fill_poly)) {
+        polygon.setPoint(pt_ct, sf::Vector2f(pt.x, pt.y));
+      }
       window.draw(polygon);
     }
   }
@@ -190,94 +289,14 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
   // Draw rest of maze
   for (const auto &cell : dmaze.grid.positions()) {
     auto corners = cell_polygon(cell);
-    if (!dmaze.grid.connected_cell_east(cell)) {
-      // sf::Vertex line[] = {
-      //     sf::Vertex(sf::Vector2f(corners.b.x, corners.b.y), line_color),
-      //     sf::Vertex(sf::Vector2f(corners.c.x, corners.c.y), line_color)};
-
-      // window.draw(line, 2, sf::Lines);
+    const bool no_inset = true;
+    for (const auto &seg : corners.segments) {
       sf::Vertex line[] = {
-          sf::Vertex(sf::Vector2f(corners.x3, corners.y2), line_color),
-          sf::Vertex(sf::Vector2f(corners.x3, corners.y3), line_color)};
+          sf::Vertex(sf::Vector2f(seg.a.x, seg.a.y), line_color),
+          sf::Vertex(sf::Vector2f(seg.b.x, seg.b.y), line_color)};
 
       window.draw(line, 2, sf::Lines);
-    } else {
-      sf::Vertex line1[] = {
-          sf::Vertex(sf::Vector2f(corners.x3, corners.y2), line_color),
-          sf::Vertex(sf::Vector2f(corners.x4, corners.y2), line_color)};
-      sf::Vertex line2[] = {
-          sf::Vertex(sf::Vector2f(corners.x3, corners.y3), line_color),
-          sf::Vertex(sf::Vector2f(corners.x4, corners.y3), line_color)};
-
-      window.draw(line1, 2, sf::Lines);
-      window.draw(line2, 2, sf::Lines);
     }
-    if (!dmaze.grid.connected_cell_south(cell)) {
-      // sf::Vertex line[] = {
-      //     sf::Vertex(sf::Vector2f(corners.d.x, corners.d.y), line_color),
-      //     sf::Vertex(sf::Vector2f(corners.c.x, corners.c.y), line_color)};
-
-      // window.draw(line, 2, sf::Lines);
-      sf::Vertex line[] = {
-          sf::Vertex(sf::Vector2f(corners.x2, corners.y3), line_color),
-          sf::Vertex(sf::Vector2f(corners.x3, corners.y3), line_color)};
-
-      window.draw(line, 2, sf::Lines);
-    } else {
-      sf::Vertex line1[] = {
-          sf::Vertex(sf::Vector2f(corners.x2, corners.y3), line_color),
-          sf::Vertex(sf::Vector2f(corners.x2, corners.y4), line_color)};
-      sf::Vertex line2[] = {
-          sf::Vertex(sf::Vector2f(corners.x3, corners.y3), line_color),
-          sf::Vertex(sf::Vector2f(corners.x3, corners.y4), line_color)};
-
-      window.draw(line1, 2, sf::Lines);
-      window.draw(line2, 2, sf::Lines);
-    }
-
-    if (!dmaze.grid.connected_cell_north(cell)) {
-      sf::Vertex line[] = {
-          sf::Vertex(sf::Vector2f(corners.x2, corners.y2), line_color),
-          sf::Vertex(sf::Vector2f(corners.x3, corners.y2), line_color)};
-
-      window.draw(line, 2, sf::Lines);
-    } else {
-      sf::Vertex line1[] = {
-          sf::Vertex(sf::Vector2f(corners.x2, corners.y1), line_color),
-          sf::Vertex(sf::Vector2f(corners.x2, corners.y2), line_color)};
-      sf::Vertex line2[] = {
-          sf::Vertex(sf::Vector2f(corners.x3, corners.y1), line_color),
-          sf::Vertex(sf::Vector2f(corners.x3, corners.y2), line_color)};
-
-      window.draw(line1, 2, sf::Lines);
-      window.draw(line2, 2, sf::Lines);
-    }
-
-    if (!dmaze.grid.connected_cell_west(cell)) {
-      sf::Vertex line[] = {
-          sf::Vertex(sf::Vector2f(corners.x2, corners.y2), line_color),
-          sf::Vertex(sf::Vector2f(corners.x2, corners.y3), line_color)};
-
-      window.draw(line, 2, sf::Lines);
-    } else {
-      sf::Vertex line1[] = {
-          sf::Vertex(sf::Vector2f(corners.x1, corners.y2), line_color),
-          sf::Vertex(sf::Vector2f(corners.x2, corners.y2), line_color)};
-      sf::Vertex line2[] = {
-          sf::Vertex(sf::Vector2f(corners.x1, corners.y3), line_color),
-          sf::Vertex(sf::Vector2f(corners.x2, corners.y3), line_color)};
-
-      window.draw(line1, 2, sf::Lines);
-      window.draw(line2, 2, sf::Lines);
-    }
-
-    // if(dmaze.grid.masked_at(cell))
-    // {
-    //   sf::CircleShape shape((std::min(cell_width, cell_height) / 2) * 0.8);
-    //   shape.setPosition(x1 + cell_width * 0.1, y1 + cell_height * 0.1);
-    //   shape.setFillColor(sf::Color::Red);
-    //   window.draw(shape);
-    // }
   }
   // Draw start/end
   {
@@ -299,7 +318,7 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
     draw_path(dmaze.grid, window, dmaze.path, center_of_cell);
   }
   draw_path(dmaze.grid, window, dmaze.player_path, center_of_cell,
-            sf::Color::Blue);
+            sf::Color::Cyan);
 
   // Labels
   static sf::Font font;
@@ -334,6 +353,7 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
 
 void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   auto window_size = window.getSize();
+  const auto inset = 0.1f;
   const float cell_width =
       800.0 / (2 * dmaze.grid.height_ + 2);  // yes use height
   const float cell_height = 600.0 / (2 * dmaze.grid.height_ + 2);
@@ -344,25 +364,19 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   constexpr double pi = M_PI;
   const auto theta = [&](auto row) { return 2 * pi / dmaze.grid.widths_[row]; };
 
-  const auto cell_x_to_draw_x = [&](const auto cell) {
-    auto &[row, col] = cell;
-    const auto inner_radius = row * cell_size;
+  const auto cell_to_draw_x = [&](const auto row, const auto col) -> float {
+    const auto radius = row * cell_size;
     const auto theta_ccw = col * theta(row);
-    const float ax = center_x + (inner_radius * std::cos(theta_ccw));
-    return ax;
+    return center_x + (radius * std::cos(theta_ccw));
   };
-  const auto cell_y_to_draw_y = [&](const auto cell) {
-    auto &[row, col] = cell;
-    const auto inner_radius = row * cell_size;
+  const auto cell_to_draw_y = [&](const auto row, const auto col) -> float {
+    const auto radius = row * cell_size;
     const auto theta_ccw = col * theta(row);
-    const float ay = center_y + (inner_radius * std::sin(theta_ccw));
-    return ay;
+    return center_y + (radius * std::sin(theta_ccw));
   };
   const auto center_of_cell = [&](const auto row, const auto col) {
-    //
-    return std::make_pair(
-        cell_x_to_draw_x(std::make_pair(row + 0.5f, col + 0.5f)),
-        cell_y_to_draw_y(std::make_pair(row + 0.5f, col + 0.5f)));
+    return std::make_pair(cell_to_draw_x(row + 0.5f, col + 0.5f),
+                          cell_to_draw_y(row + 0.5f, col + 0.5f));
   };
   auto cell_polygon = [&](auto cell) -> CellPoly {
     const auto inner_radius = cell.row * cell_size;
@@ -370,32 +384,22 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     const auto theta_ccw = cell.col * theta(cell.row);
     const auto theta_cw = (cell.col + 1) * theta(cell.row);
 
-    const float ax = center_x + (inner_radius * std::cos(theta_ccw));
-    const float ay = center_y + (inner_radius * std::sin(theta_ccw));
-    const float bx = center_x + (outer_radius * std::cos(theta_ccw));
-    const float by = center_y + (outer_radius * std::sin(theta_ccw));
-    const float cx = center_x + (inner_radius * std::cos(theta_cw));
-    const float cy = center_y + (inner_radius * std::sin(theta_cw));
-    const float dx = center_x + (outer_radius * std::cos(theta_cw));
-    const float dy = center_y + (outer_radius * std::sin(theta_cw));
-
+    auto [fill_poly, segs] = square_cell_to_segment_coords(cell, dmaze);
     return {
-        .a = CellCorner{ax, ay},
-        .b = CellCorner{cx, cy},
-        .c = CellCorner{dx, dy},
-        .d = CellCorner{bx, by},
-        .i = CellCorner{cell_x_to_draw_x(
-                            std::make_pair(cell.row + 0.5f, cell.col + 0.5f)),
-                        cell_y_to_draw_y(
-                            std::make_pair(cell.row + 0.5f, cell.col + 0.5f))},
-        .x1 = ax,
-        .x2 = 0.0,
-        .x3 = 0.0,
-        .x4 = cx,
-        .y1 = ay,
-        .y2 = 0.0,
-        .y3 = 0.0,
-        .y4 = cy,
+        .i = CellCorner{cell_to_draw_x(cell.row + 0.5f, cell.col + 0.5f),
+                        cell_to_draw_y(cell.row + 0.5f, cell.col + 0.5f)},
+        .fill_poly = fill_poly | ranges::views::transform([&](auto pt) {
+                       return CellCorner{cell_to_draw_x(pt.y, pt.x),
+                                         cell_to_draw_y(pt.y, pt.x)};
+                     }) |
+                     ranges::to<std::vector>,
+        .segments = segs | ranges::views::transform([&](auto seg) {
+                      return CellSegment(cell_to_draw_x(seg.a.y, seg.a.x),
+                                         cell_to_draw_y(seg.a.y, seg.a.x),
+                                         cell_to_draw_x(seg.b.y, seg.b.x),
+                                         cell_to_draw_y(seg.b.y, seg.b.x));
+                    }) |
+                    ranges::to<std::vector>,
     };
   };
 
@@ -420,37 +424,35 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   const float cell_height = 600.0 / (dmaze.grid.height_ + 2);
   const auto line_color = sf::Color::Green;
   const auto inset = 0.1f;
-  const auto inset_x = inset * cell_width;
-  const auto inset_y = inset * cell_height;
 
-  const auto cell_x_to_draw_x = [&](const auto row) {
+  const auto cell_to_draw_x = [&](const auto row) {
     return cell_height * (row + 1);
   };
-  const auto cell_y_to_draw_y = [&](const auto col) {
+  const auto cell_to_draw_y = [&](const auto col) {
     return cell_width * (col + 1);
   };
   const auto center_of_cell = [&](const auto row, const auto col) {
-    return std::make_pair(cell_y_to_draw_y(col + 0.5f),
-                          cell_x_to_draw_x(row + 0.5f));
+    return std::make_pair(cell_to_draw_y(col + 0.5f),
+                          cell_to_draw_x(row + 0.5f));
   };
   auto cell_polygon = [&](auto cell) -> CellPoly {
     const auto &[row, col] = cell;
 
+    auto [fill_poly, segs] = square_cell_to_segment_coords(cell, dmaze);
     return {
-        .a = CellCorner{cell_y_to_draw_y(col), cell_x_to_draw_x(row)},
-        .b = CellCorner{cell_y_to_draw_y(col + 1), cell_x_to_draw_x(row)},
-        .c = CellCorner{cell_y_to_draw_y(col + 1), cell_x_to_draw_x(row + 1)},
-        .d = CellCorner{cell_y_to_draw_y(col), cell_x_to_draw_x(row + 1)},
-        .i = CellCorner{cell_y_to_draw_y(col + 0.5f),
-                        cell_x_to_draw_x(row + 0.5f)},
-        .y1 = cell_x_to_draw_x(row),
-        .y2 = cell_x_to_draw_x(row) + inset_x,
-        .y3 = cell_x_to_draw_x(row + 1) - inset_x,
-        .y4 = cell_x_to_draw_x(row + 1),
-        .x1 = cell_y_to_draw_y(col),
-        .x2 = cell_y_to_draw_y(col) + inset_y,
-        .x3 = cell_y_to_draw_y(col + 1) - inset_y,
-        .x4 = cell_y_to_draw_y(col + 1),
+        .i = CellCorner{cell_to_draw_y(col + 0.5f), cell_to_draw_x(row + 0.5f)},
+        .fill_poly =
+            fill_poly | ranges::views::transform([&](auto pt) {
+              return CellCorner{cell_to_draw_y(pt.x), cell_to_draw_x(pt.y)};
+            }) |
+            ranges::to<std::vector>,
+        .segments = segs | ranges::views::transform([&](auto seg) {
+                      return CellSegment(
+                          // swap x,y
+                          cell_to_draw_y(seg.a.x), cell_to_draw_x(seg.a.y),
+                          cell_to_draw_y(seg.b.x), cell_to_draw_x(seg.b.y));
+                    }) |
+                    ranges::to<std::vector>,
     };
   };
 
@@ -483,11 +485,12 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
 }
 
 void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
+  bool wrap_ew = true;
   std::unique_ptr<DrawableMaze> dmaze;
-  auto regen_maze = [&dmaze, &method_idx, &width, &height, &mask]() {
+  auto regen_maze = [&dmaze, &method_idx, &width, &height, &mask, &wrap_ew]() {
     const auto &method = GeneratorRegistry::GetMazeGeneratorByIndex(method_idx);
     // dmaze = std::make_unique<DrawableMaze>(width, height, method);
-    dmaze = std::make_unique<DrawableMaze>(mask, method);
+    dmaze = std::make_unique<DrawableMaze>(mask, method, wrap_ew);
   };
 
   regen_maze();
@@ -550,8 +553,15 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
                            GeneratorRegistry::GetMazeGeneratorCount();
               need_regen = true;
               break;
+            case 'i':
+              dmaze->show_inset = !dmaze->show_inset;
+              break;
             case 'r':
               dmaze->polar_maze = !dmaze->polar_maze;
+              break;
+            case 'w':
+              wrap_ew = !wrap_ew;
+              need_regen = true;
               break;
             case 'p':
               fmt::print("{}\n", dmaze->grid);

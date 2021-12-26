@@ -254,4 +254,10 @@ void recursive_backtracking_maze(Grid &grid) {
 GeneratorRegistry::RegisterGenerator r('R', "RecursiveBacktracking",
                                        recursive_backtracking_maze);
 
+void all_walls_maze(Grid &grid) {
+  // default is all walls
+}
+GeneratorRegistry::RegisterGenerator z('Z', "AllWalls",
+                                       all_walls_maze);
+
 };  // namespace jt::maze
