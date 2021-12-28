@@ -124,7 +124,7 @@ auto draw_path = [](const Grid &grid, sf::RenderWindow &window,
       [center_of_cell, line_color, &grid](auto pos) {
         auto &[row, col] = pos;
         assert(row < grid.height_ && col < grid.widths_.back());
-        auto draw_pos = center_of_cell(row, col);
+        auto draw_pos = center_of_cell(pos);
         return sf::Vertex(sf::Vector2f(draw_pos.first, draw_pos.second),
                           line_color);
       });
@@ -181,8 +181,115 @@ struct CellPoly {
   // +---+----------+---+ y4
 };
 
+auto hex_center_of_cell = [](const auto &cell) {
+  const auto &[row, col] = cell;
+  const auto cell_height = 1.0f;
+  const auto b_size = 0.5f;
+  const auto s = 2.0 * b_size / std::sqrt(3.0f);
+  const auto a_size = s / 2.0f;
+
+  const bool even_col = col % 2 == 0;
+  const float cx = s + 3 * col * a_size;
+  const float cy = (even_col ? 1.0f : 2.0f) * b_size + row * cell_height;
+
+  return CellCorner(cx, cy);
+};
+auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
+  const auto cell_height = 1.0f;
+  const auto b_size = 0.5f;
+  const auto s = 2.0 * b_size / std::sqrt(3.0f);
+  const auto a_size = s / 2.0f;
+
+  const bool even_row = cell.row % 2 == 0;
+  const bool even_col = cell.col % 2 == 0;
+  const auto [cx, cy] = hex_center_of_cell(cell);
+
+  const auto x_far_west = cx - s;
+  const auto x_near_west = cx - a_size;
+  const auto x_near_east = cx + a_size;
+  const auto x_far_east = cx + s;
+
+  const auto y_north = cy - b_size;
+  const auto y_mid = cy;
+  const auto y_south = cy + b_size;
+
+  std::vector<CellSegment> segments;
+  std::vector<CellCorner> fill_poly;
+
+  // Fixme: These are not correct since currently I do not have real hex mazes.
+  // To demo this code, just open whole eastt/west based on a square maze.
+  if (!dmaze.grid.connected_cell_north(cell)) {
+    segments.emplace_back(x_near_west, y_north, x_near_east, y_north);
+  }
+
+  if (!dmaze.grid.connected_cell_east(cell)) {
+    segments.emplace_back(x_near_east, y_north, x_far_east,
+                          y_mid);  // top '\' wall
+    segments.emplace_back(x_far_east, y_mid, x_near_east,
+                          y_south);  // bottom '/' wall
+  } else {
+    // In hack sq maze mode, always draw one of the walls depending on if we
+    // are a tad higher or tad lower.
+    if (even_col) {
+      segments.emplace_back(x_near_east, y_north, x_far_east, y_mid);
+    } else {
+      segments.emplace_back(x_far_east, y_mid, x_near_east, y_south);
+    }
+  }
+
+  if (!dmaze.grid.connected_cell_south(cell)) {
+    segments.emplace_back(x_near_east, y_south, x_near_west, y_south);
+  }
+
+  if (!dmaze.grid.connected_cell_west(cell)) {
+    segments.emplace_back(x_near_west, y_south, x_far_west, y_mid);
+    segments.emplace_back(x_far_west, y_mid, x_near_west, y_north);
+  } else {
+    if (!even_col) {
+      segments.emplace_back(x_near_west, y_south, x_far_west, y_mid);
+    } else {
+      segments.emplace_back(x_far_west, y_mid, x_near_west, y_north);
+    }
+  }
+
+  fill_poly.emplace_back(x_far_west, y_mid);
+  fill_poly.emplace_back(x_near_west, y_north);
+  fill_poly.emplace_back(x_near_east, y_north);
+  fill_poly.emplace_back(x_far_east, y_mid);
+  fill_poly.emplace_back(x_near_east, y_south);
+  fill_poly.emplace_back(x_near_west, y_south);
+
+  return std::make_pair(fill_poly, segments);
+};
+
+auto triangle_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
+  // width = s
+  // half_width = width / 2.0
+  // height = s * Math.sqrt(3) / 2
+  // half_height = height / 2.0
+  //
+  // half_width = size / 2.0
+  // height = size * Math.sqrt(3) / 2.0
+  // half_height = height / 2.0
+  //
+  // west_x = cx - half_width
+  // mid_x  = cx
+  // east_x = cx + half_width
+  // if upright?
+  // base_y = cy + half_height apex_y = cy - half_height
+  // else
+  //   base_y = cy - half_height
+  //   apex_y = cy + half_height
+  // end
+  return 0;
+};
+
 // This takes a cell and returns the line segments to traw in "cell space" e.g.
 // against a grid of 1x1 cells.
+auto square_center_of_cell = [](const auto &cell) {
+  const auto &[row, col] = cell;
+  return CellCorner(row + 0.5f, col + 0.5f);
+};
 auto square_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
   const auto inset = 0.1f;
   const auto &[row, col] = cell;
@@ -284,6 +391,20 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
       }
       window.draw(polygon);
     }
+  } else {
+    // Easier to debug with a sligthly different color here
+    for (const auto &cell : dmaze.grid.positions()) {
+      auto corners = cell_polygon(cell);
+      sf::ConvexShape polygon;
+      polygon.setFillColor(sf::Color(47, 79, 79));  // dark gray
+
+      polygon.setPointCount(corners.fill_poly.size());
+      for (const auto &[pt_ct, pt] :
+           ranges::views::enumerate(corners.fill_poly)) {
+        polygon.setPoint(pt_ct, sf::Vector2f(pt.x, pt.y));
+      }
+      window.draw(polygon);
+    }
   }
 
   // Draw rest of maze
@@ -374,9 +495,10 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     const auto theta_ccw = col * theta(row);
     return center_y + (radius * std::sin(theta_ccw));
   };
-  const auto center_of_cell = [&](const auto row, const auto col) {
-    return std::make_pair(cell_to_draw_x(row + 0.5f, col + 0.5f),
-                          cell_to_draw_y(row + 0.5f, col + 0.5f));
+  const auto center_of_cell = [&](const auto cell) {
+    // const auto [cx,cy] = hex_center_of_cell(cell);
+    const auto [cy, cx] = square_center_of_cell(cell);
+    return std::make_pair(cell_to_draw_x(cx, cy), cell_to_draw_y(cx, cy));
   };
   auto cell_polygon = [&](auto cell) -> CellPoly {
     const auto inner_radius = cell.row * cell_size;
@@ -385,6 +507,7 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     const auto theta_cw = (cell.col + 1) * theta(cell.row);
 
     auto [fill_poly, segs] = square_cell_to_segment_coords(cell, dmaze);
+    // auto [fill_poly, segs] = hex_cell_to_segment_coords(cell, dmaze);
     return {
         .i = CellCorner{cell_to_draw_x(cell.row + 0.5f, cell.col + 0.5f),
                         cell_to_draw_y(cell.row + 0.5f, cell.col + 0.5f)},
@@ -431,14 +554,16 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   const auto cell_to_draw_y = [&](const auto col) {
     return cell_width * (col + 1);
   };
-  const auto center_of_cell = [&](const auto row, const auto col) {
-    return std::make_pair(cell_to_draw_y(col + 0.5f),
-                          cell_to_draw_x(row + 0.5f));
+  const auto center_of_cell = [&](const auto cell) {
+    // const auto [cx,cy] = hex_center_of_cell(cell);
+    const auto [cy, cx] = square_center_of_cell(cell);
+    return std::make_pair(cell_to_draw_y(cx), cell_to_draw_x(cy));
   };
   auto cell_polygon = [&](auto cell) -> CellPoly {
     const auto &[row, col] = cell;
 
     auto [fill_poly, segs] = square_cell_to_segment_coords(cell, dmaze);
+    // auto [fill_poly, segs] = hex_cell_to_segment_coords(cell, dmaze);
     return {
         .i = CellCorner{cell_to_draw_y(col + 0.5f), cell_to_draw_x(row + 0.5f)},
         .fill_poly =
@@ -455,30 +580,6 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
                     ranges::to<std::vector>,
     };
   };
-
-  //// Draw top border
-  //{
-  //  float x1 = cell_width * (0 + 1);
-
-  //  float y1 = cell_height * (0 + 1);
-  //  float y2 = cell_height * (dmaze.grid.height_ + 1);
-  //  sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
-  //                       sf::Vertex(sf::Vector2f(x1, y2), line_color)};
-
-  //  window.draw(line, 2, sf::Lines);
-  //}
-
-  //// Draw left border
-  //{
-  //  float x1 = cell_width * (0 + 1);
-  //  float x2 = cell_width * (dmaze.grid.widths_.back() + 1);
-
-  //  float y1 = cell_height * (0 + 1);
-  //  sf::Vertex line[] = {sf::Vertex(sf::Vector2f(x1, y1), line_color),
-  //                       sf::Vertex(sf::Vector2f(x2, y1), line_color)};
-
-  //  window.draw(line, 2, sf::Lines);
-  //}
 
   return draw_maze_common(window, dmaze, cell_polygon, center_of_cell,
                           cell_width, cell_height);
