@@ -56,6 +56,8 @@ struct DrawableMaze {
     method.generate(grid);
     auto t2 = high_resolution_clock::now();
 
+    braid_maze(grid, braid_maze);
+
     if (use_polar_widths) {
       grid.widths_ = calculate_variable_widths(grid.height_);
     }
@@ -106,6 +108,7 @@ struct DrawableMaze {
   bool polar_maze = false;
   std::vector<CellCoordinate> player_path{};
   bool show_inset = false;
+  float braid_maze = 0.0f;
 };
 
 auto draw_path = [](const Grid &grid, sf::RenderWindow &window,

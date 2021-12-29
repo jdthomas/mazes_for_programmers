@@ -171,7 +171,8 @@ struct Grid {
       return c.col == 0 || masked_at(neighbor) ? std::nullopt
                                                : std::make_optional(neighbor);
     } else {
-      auto neighbor = CellCoordinate{c.row, (widths_[c.row] + c.col - 1) % widths_[c.row]};
+      auto neighbor =
+          CellCoordinate{c.row, (widths_[c.row] + c.col - 1) % widths_[c.row]};
       return masked_at(neighbor) ? std::nullopt : std::make_optional(neighbor);
     }
   }
@@ -228,6 +229,14 @@ struct Grid {
            ranges::to<std::vector>;
   }
 
+  std::vector<CellCoordinate> get_unconnected_neighbors(CellCoordinate c) {
+    auto an = get_all_neighbors(c);
+    return an | ranges::views::filter([this, &c](const auto &c2) {
+             return !is_linked(c, c2);
+           }) |
+           ranges::to<std::vector>;
+  }
+
   // Helpers for getting all neighbors
   std::array<std::optional<CellCoordinate>, 4> get_all_neighbors_(
       CellCoordinate c) const {
@@ -251,7 +260,7 @@ struct Grid {
   std::optional<CellCoordinate> random_closed_neighbor(CellCoordinate c) {
     auto neighbors = get_all_neighbors(c);
     return jt_range_front(neighbors | ranges::views::filter([this](auto n) {
-                            return this->is_closed_cell(n);
+                            return is_closed_cell(n);
                           }) |
                           ranges::views::sample(1, gen));
   }
@@ -269,7 +278,8 @@ struct Grid {
 
     auto m = as_mdspan();
     if (dx == -1 || dx == widths_[row_1] - 1) {
-      m(row_1, (widths_[row_1] + col_1 - 1) % widths_[row_1]).right = Wall::Open;
+      m(row_1, (widths_[row_1] + col_1 - 1) % widths_[row_1]).right =
+          Wall::Open;
       // fmt::print("Setting right of {} {}\n", col_1 - 1, row_1);
     } else if (dx == 1 || dx == -widths_[row_1] + 1) {
       m(row_1, col_1).right = Wall::Open;
@@ -286,6 +296,28 @@ struct Grid {
     }
   }
 
+  bool is_linked(CellCoordinate c1, CellCoordinate c2) {
+    auto &[row_1, col_1] = c1;
+    auto &[row_2, col_2] = c2;
+    ssize_t dx = col_2 - col_1;
+    ssize_t dy = row_2 - row_1;
+    auto m = as_mdspan();
+    if (dx == -1 || dx == widths_[row_1] - 1) {
+      return m(row_1, (widths_[row_1] + col_1 - 1) % widths_[row_1]).right ==
+             Wall::Open;
+    } else if (dx == 1 || dx == -widths_[row_1] + 1) {
+      return m(row_1, col_1).right == Wall::Open;
+    } else if (dy == -1) {
+      return m(row_1 - 1, col_1).down == Wall::Open;
+    } else if (dy == 1) {
+      return m(row_1, col_1).down == Wall::Open;
+    } else {
+      throw std::runtime_error(
+          fmt::format("Bad neighbor: {} -> {}, dx={}", c1, c2, dx));
+    }
+    return false;
+  }
+
   bool is_boundry_cell(CellCoordinate c) {
     return c.row == 0 || c.col == 0 || c.row == height_ - 1 ||
            c.col == widths_[c.row] - 1;
@@ -297,7 +329,8 @@ struct Grid {
       return (c.row == 0 || m(c.row - 1, c.col).down != Wall::Open) &&
              (c.row == height_ - 1 || m(c.row, c.col).down != Wall::Open) &&
              (c.col == 0 || m(c.row, c.col - 1).right != Wall::Open) &&
-             (c.col == widths_[c.row] - 1 || m(c.row, c.col).right != Wall::Open);
+             (c.col == widths_[c.row] - 1 ||
+              m(c.row, c.col).right != Wall::Open);
     } else {
       auto tmp = get_connected_neighbors_(c);
       return ranges::accumulate(tmp | ranges::views::transform(
@@ -341,6 +374,8 @@ std::tuple<CellCoordinate, int> furthest_cell(const Grid &grid,
 
 std::vector<CellCoordinate> longest_path_(Grid &grid,
                                           std::vector<int> &distances);
+
+void braid_maze(Grid &grid, float p = 1.0);
 
 class GeneratorRegistry {
  public:
@@ -473,5 +508,6 @@ auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
     fmt::format_to(ctx.out(), "\n");
   }
 
-  return fmt::format_to(ctx.out(), "... {} x {}\n", grid.widths_.back(), grid.height_);
+  return fmt::format_to(ctx.out(), "... {} x {}\n", grid.widths_.back(),
+                        grid.height_);
 }

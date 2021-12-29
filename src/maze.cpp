@@ -30,7 +30,7 @@ namespace stdex = std::experimental;
 namespace jt::maze {
 
 std::vector<size_t> calculate_variable_widths(size_t height) {
-  auto widths = ranges::views::iota(1, static_cast<int>(height+1)) |
+  auto widths = ranges::views::iota(1, static_cast<int>(height + 1)) |
                 ranges::views::partial_sum([height](auto acc, auto row) {
                   const float row_height = 1.0 / height;
                   const float rad = float(row) / height;
@@ -150,7 +150,7 @@ bool operator==(const CellCoordinate &a, const CellCoordinate &b) {
   return a.row == b.row && a.col == b.col;
 }
 Grid::Grid(size_t width, size_t height)
-    : widths_(height,width),
+    : widths_(height, width),
       height_{height},
       cells_{width * height},
       mdspan_{cells_.data(), height_, widths_.back()},
@@ -168,5 +168,43 @@ Grid::Grid(size_t width, size_t height)
 };
 
 std::vector<GeneratorRegistry::RegistryConfig> GeneratorRegistry::registry_{};
+
+void braid_maze(Grid &grid, float p) {
+  auto pos = grid.positions();
+  {
+    auto dead_ends =
+        ranges::accumulate(pos | ranges::views::transform([&](auto c) {
+                             return grid.is_dead_end_cell(c) ? 1 : 0;
+                           }),
+                           0);
+    fmt::print("--- Dead ends before braid: {}\n", dead_ends);
+  }
+  for (const auto &cell :
+       pos | ranges::views::filter([&grid](const auto &cell) {
+         return grid.is_dead_end_cell(cell);
+       })) {
+    std::bernoulli_distribution d(p);
+    if (!d(grid.gen)) {
+      continue;
+    }
+    auto neighbors = grid.get_unconnected_neighbors(cell);
+    ranges::shuffle(neighbors);
+    ranges::actions::sort(neighbors, std::less{}, [&](auto c) {
+      return grid.get_unconnected_neighbors(c).size();
+    });
+    // pick best unlinked neighbor and link
+    // auto best = neighbors | ranges::views::filter( count_neighbors == 1);
+    // fmt::print("{} : {} -> {}\n", neighbors, cell, neighbors.front());
+    grid.link(cell, neighbors.front());
+  }
+  {
+    auto dead_ends =
+        ranges::accumulate(pos | ranges::views::transform([&](auto c) {
+                             return grid.is_dead_end_cell(c) ? 1 : 0;
+                           }),
+                           0);
+    fmt::print("--- Dead ends after braid: {}\n", dead_ends);
+  }
+}
 
 };  // namespace jt::maze
