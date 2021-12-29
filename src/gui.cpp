@@ -56,7 +56,7 @@ struct DrawableMaze {
     method.generate(grid);
     auto t2 = high_resolution_clock::now();
 
-    braid_maze(grid, braid_maze);
+    braid_maze(grid, braid_maze_ratio);
 
     if (use_polar_widths) {
       grid.widths_ = calculate_variable_widths(grid.height_);
@@ -108,7 +108,8 @@ struct DrawableMaze {
   bool polar_maze = false;
   std::vector<CellCoordinate> player_path{};
   bool show_inset = false;
-  float braid_maze = 0.0f;
+  float braid_maze_ratio = 0.0f;
+  bool show_as_hex = false;
 };
 
 auto draw_path = [](const Grid &grid, sf::RenderWindow &window,
@@ -127,8 +128,8 @@ auto draw_path = [](const Grid &grid, sf::RenderWindow &window,
       [center_of_cell, line_color, &grid](auto pos) {
         auto &[row, col] = pos;
         assert(row < grid.height_ && col < grid.widths_.back());
-        auto draw_pos = center_of_cell(pos);
-        return sf::Vertex(sf::Vector2f(draw_pos.first, draw_pos.second),
+        const auto &[draw_pos_first, draw_pos_second] = center_of_cell(pos);
+        return sf::Vertex(sf::Vector2f(draw_pos_first, draw_pos_second),
                           line_color);
       });
 };
@@ -202,6 +203,7 @@ auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
   const auto b_size = 0.5f;
   const auto s = 2.0 * b_size / std::sqrt(3.0f);
   const auto a_size = s / 2.0f;
+  const auto inset = 0.1f;
 
   const bool even_row = cell.row % 2 == 0;
   const bool even_col = cell.col % 2 == 0;
@@ -216,51 +218,148 @@ auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
   const auto y_mid = cy;
   const auto y_south = cy + b_size;
 
+  const auto y_north_inset = y_north + inset;
+  const auto y_south_inset = y_south - inset;
+  const auto x_far_west_inset = x_far_west + inset;
+  const auto x_far_east_inset = x_far_east - inset;
+
   std::vector<CellSegment> segments;
   std::vector<CellCorner> fill_poly;
 
-  // Fixme: These are not correct since currently I do not have real hex mazes.
-  // To demo this code, just open whole eastt/west based on a square maze.
-  if (!dmaze.grid.connected_cell_north(cell)) {
-    segments.emplace_back(x_near_west, y_north, x_near_east, y_north);
-  }
-
-  if (!dmaze.grid.connected_cell_east(cell)) {
-    segments.emplace_back(x_near_east, y_north, x_far_east,
-                          y_mid);  // top '\' wall
-    segments.emplace_back(x_far_east, y_mid, x_near_east,
-                          y_south);  // bottom '/' wall
-  } else {
-    // In hack sq maze mode, always draw one of the walls depending on if we
-    // are a tad higher or tad lower.
-    if (even_col) {
-      segments.emplace_back(x_near_east, y_north, x_far_east, y_mid);
-    } else {
-      segments.emplace_back(x_far_east, y_mid, x_near_east, y_south);
+  if (!dmaze.show_inset) {
+    // Fixme: These are not correct since currently I do not have real hex
+    // mazes. To demo this code, just open whole eastt/west based on a square
+    // maze.
+    if (!dmaze.grid.connected_cell_north(cell)) {
+      segments.emplace_back(x_near_west, y_north, x_near_east, y_north);
     }
-  }
 
-  if (!dmaze.grid.connected_cell_south(cell)) {
-    segments.emplace_back(x_near_east, y_south, x_near_west, y_south);
-  }
+    if (!dmaze.grid.connected_cell_east(cell)) {
+      segments.emplace_back(x_near_east, y_north, x_far_east,
+                            y_mid);  // top '\' wall
+      segments.emplace_back(x_far_east, y_mid, x_near_east,
+                            y_south);  // bottom '/' wall
+    } else {
+      if (even_col) {
+        segments.emplace_back(x_near_east, y_north, x_far_east, y_mid);
+      } else {
+        segments.emplace_back(x_far_east, y_mid, x_near_east, y_south);
+      }
+    }
 
-  if (!dmaze.grid.connected_cell_west(cell)) {
-    segments.emplace_back(x_near_west, y_south, x_far_west, y_mid);
-    segments.emplace_back(x_far_west, y_mid, x_near_west, y_north);
-  } else {
-    if (!even_col) {
+    if (!dmaze.grid.connected_cell_south(cell)) {
+      segments.emplace_back(x_near_east, y_south, x_near_west, y_south);
+    }
+
+    if (!dmaze.grid.connected_cell_west(cell)) {
       segments.emplace_back(x_near_west, y_south, x_far_west, y_mid);
-    } else {
       segments.emplace_back(x_far_west, y_mid, x_near_west, y_north);
+    } else {
+      if (!even_col) {
+        segments.emplace_back(x_near_west, y_south, x_far_west, y_mid);
+      } else {
+        segments.emplace_back(x_far_west, y_mid, x_near_west, y_north);
+      }
+    }
+
+    fill_poly.emplace_back(x_far_west, y_mid);
+    fill_poly.emplace_back(x_near_west, y_north);
+    fill_poly.emplace_back(x_near_east, y_north);
+    fill_poly.emplace_back(x_far_east, y_mid);
+    fill_poly.emplace_back(x_near_east, y_south);
+    fill_poly.emplace_back(x_near_west, y_south);
+  } else {
+    // Show inset
+    if (!dmaze.grid.connected_cell_north(cell)) {
+      segments.emplace_back(x_near_west, y_north_inset, x_near_east,
+                            y_north_inset);
+    } else {
+      // TODO: really only want to draw thesse based on if there is a wall next to them
+      segments.emplace_back(x_near_west, y_north, x_near_west, y_north_inset);
+      segments.emplace_back(x_near_east, y_north, x_near_east, y_north_inset);
+    }
+
+    if (!dmaze.grid.connected_cell_east(cell)) {
+      segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset,
+                            y_mid);
+      segments.emplace_back(x_far_east_inset, y_mid, x_near_east,
+                            y_south_inset);
+    } else {
+      if (even_col) {
+        segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset,
+                              y_mid);  // SQ Data hack
+
+        segments.emplace_back(x_far_east, y_mid, x_far_east_inset, y_mid);
+        segments.emplace_back(x_near_east, y_south_inset, x_near_east, y_south);
+      } else {
+        segments.emplace_back(x_far_east_inset, y_mid, x_near_east,
+                              y_south_inset);  // SQ Data hack
+
+        segments.emplace_back(x_far_east, y_mid, x_far_east_inset, y_mid);
+        segments.emplace_back(x_near_east, y_north_inset, x_near_east, y_north);
+      }
+    }
+
+    if (!dmaze.grid.connected_cell_south(cell)) {
+      segments.emplace_back(x_near_east, y_south_inset, x_near_west,
+                            y_south_inset);
+    } else {
+      segments.emplace_back(x_near_west, y_south, x_near_west, y_south_inset);
+      segments.emplace_back(x_near_east, y_south, x_near_east, y_south_inset);
+    }
+
+    if (!dmaze.grid.connected_cell_west(cell)) {
+      segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset,
+                            y_mid);
+      segments.emplace_back(x_far_west_inset, y_mid, x_near_west,
+                            y_north_inset);
+    } else {
+      if (!even_col) {
+        segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset,
+                              y_mid);  // SQ Data hack
+
+        segments.emplace_back(x_far_west, y_mid, x_far_west_inset, y_mid);
+        segments.emplace_back(x_near_west, y_north_inset, x_near_west, y_north);
+      } else {
+        segments.emplace_back(x_far_west_inset, y_mid, x_near_west,
+                              y_north_inset);  // SQ Data hack
+
+        segments.emplace_back(x_far_west, y_mid, x_far_west_inset, y_mid);
+        segments.emplace_back(x_near_west, y_south_inset, x_near_west, y_south);
+      }
+    }
+
+    fill_poly.emplace_back(x_far_west_inset, y_mid);
+    if (dmaze.grid.connected_cell_west(cell) && !even_col) {
+      fill_poly.emplace_back(x_far_west, y_mid);
+      fill_poly.emplace_back(x_near_west, y_north);
+    }
+    fill_poly.emplace_back(x_near_west, y_north_inset);
+    if (dmaze.grid.connected_cell_north(cell)) {
+      fill_poly.emplace_back(x_near_west, y_north);
+      fill_poly.emplace_back(x_near_east, y_north);
+    }
+    fill_poly.emplace_back(x_near_east, y_north_inset);
+    if (dmaze.grid.connected_cell_east(cell) && !even_col) {
+      fill_poly.emplace_back(x_near_east, y_north);
+      fill_poly.emplace_back(x_far_east, y_mid);
+    }
+    fill_poly.emplace_back(x_far_east_inset, y_mid);
+    if (dmaze.grid.connected_cell_east(cell) && even_col) {
+      fill_poly.emplace_back(x_far_east, y_mid);
+      fill_poly.emplace_back(x_near_east, y_south);
+    }
+    fill_poly.emplace_back(x_near_east, y_south_inset);
+    if (dmaze.grid.connected_cell_south(cell)) {
+      fill_poly.emplace_back(x_near_east, y_south);
+      fill_poly.emplace_back(x_near_west, y_south);
+    }
+    fill_poly.emplace_back(x_near_west, y_south_inset);
+    if (dmaze.grid.connected_cell_west(cell) && even_col) {
+      fill_poly.emplace_back(x_near_west, y_south);
+      fill_poly.emplace_back(x_far_west, y_mid);
     }
   }
-
-  fill_poly.emplace_back(x_far_west, y_mid);
-  fill_poly.emplace_back(x_near_west, y_north);
-  fill_poly.emplace_back(x_near_east, y_north);
-  fill_poly.emplace_back(x_far_east, y_mid);
-  fill_poly.emplace_back(x_near_east, y_south);
-  fill_poly.emplace_back(x_near_west, y_south);
 
   return std::make_pair(fill_poly, segments);
 };
@@ -477,7 +576,6 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
 
 void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   auto window_size = window.getSize();
-  const auto inset = 0.1f;
   const float cell_width =
       800.0 / (2 * dmaze.grid.height_ + 2);  // yes use height
   const float cell_height = 600.0 / (2 * dmaze.grid.height_ + 2);
@@ -499,9 +597,13 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     return center_y + (radius * std::sin(theta_ccw));
   };
   const auto center_of_cell = [&](const auto cell) {
-    // const auto [cx,cy] = hex_center_of_cell(cell);
-    const auto [cy, cx] = square_center_of_cell(cell);
-    return std::make_pair(cell_to_draw_x(cx, cy), cell_to_draw_y(cx, cy));
+    if (dmaze.show_as_hex) {
+      const auto [cx, cy] = hex_center_of_cell(cell);
+      return CellCorner(cell_to_draw_x(cx, cy), cell_to_draw_y(cx, cy));
+    } else {
+      const auto [cy, cx] = square_center_of_cell(cell);
+      return CellCorner(cell_to_draw_x(cx, cy), cell_to_draw_y(cx, cy));
+    }
   };
   auto cell_polygon = [&](auto cell) -> CellPoly {
     const auto inner_radius = cell.row * cell_size;
@@ -509,24 +611,41 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     const auto theta_ccw = cell.col * theta(cell.row);
     const auto theta_cw = (cell.col + 1) * theta(cell.row);
 
-    auto [fill_poly, segs] = square_cell_to_segment_coords(cell, dmaze);
-    // auto [fill_poly, segs] = hex_cell_to_segment_coords(cell, dmaze);
-    return {
-        .i = CellCorner{cell_to_draw_x(cell.row + 0.5f, cell.col + 0.5f),
-                        cell_to_draw_y(cell.row + 0.5f, cell.col + 0.5f)},
-        .fill_poly = fill_poly | ranges::views::transform([&](auto pt) {
-                       return CellCorner{cell_to_draw_x(pt.y, pt.x),
-                                         cell_to_draw_y(pt.y, pt.x)};
-                     }) |
-                     ranges::to<std::vector>,
-        .segments = segs | ranges::views::transform([&](auto seg) {
-                      return CellSegment(cell_to_draw_x(seg.a.y, seg.a.x),
-                                         cell_to_draw_y(seg.a.y, seg.a.x),
-                                         cell_to_draw_x(seg.b.y, seg.b.x),
-                                         cell_to_draw_y(seg.b.y, seg.b.x));
-                    }) |
-                    ranges::to<std::vector>,
-    };
+    if (dmaze.show_as_hex) {
+      auto [fill_poly, segs] = hex_cell_to_segment_coords(cell, dmaze);
+      return {
+          .i = center_of_cell(cell),
+          .fill_poly = fill_poly | ranges::views::transform([&](auto pt) {
+                         return CellCorner{cell_to_draw_x(pt.y, pt.x),
+                                           cell_to_draw_y(pt.y, pt.x)};
+                       }) |
+                       ranges::to<std::vector>,
+          .segments = segs | ranges::views::transform([&](auto seg) {
+                        return CellSegment(cell_to_draw_x(seg.a.y, seg.a.x),
+                                           cell_to_draw_y(seg.a.y, seg.a.x),
+                                           cell_to_draw_x(seg.b.y, seg.b.x),
+                                           cell_to_draw_y(seg.b.y, seg.b.x));
+                      }) |
+                      ranges::to<std::vector>,
+      };
+    } else {
+      auto [fill_poly, segs] = square_cell_to_segment_coords(cell, dmaze);
+      return {
+          .i = center_of_cell(cell),
+          .fill_poly = fill_poly | ranges::views::transform([&](auto pt) {
+                         return CellCorner{cell_to_draw_x(pt.y, pt.x),
+                                           cell_to_draw_y(pt.y, pt.x)};
+                       }) |
+                       ranges::to<std::vector>,
+          .segments = segs | ranges::views::transform([&](auto seg) {
+                        return CellSegment(cell_to_draw_x(seg.a.y, seg.a.x),
+                                           cell_to_draw_y(seg.a.y, seg.a.x),
+                                           cell_to_draw_x(seg.b.y, seg.b.x),
+                                           cell_to_draw_y(seg.b.y, seg.b.x));
+                      }) |
+                      ranges::to<std::vector>,
+      };
+    }
   };
 
   // Draw outer boundry
@@ -549,7 +668,6 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   const float cell_width = 800.0 / (dmaze.grid.widths_.back() + 2);
   const float cell_height = 600.0 / (dmaze.grid.height_ + 2);
   const auto line_color = sf::Color::Green;
-  const auto inset = 0.1f;
 
   const auto cell_to_draw_x = [&](const auto row) {
     return cell_height * (row + 1);
@@ -558,30 +676,52 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     return cell_width * (col + 1);
   };
   const auto center_of_cell = [&](const auto cell) {
-    // const auto [cx,cy] = hex_center_of_cell(cell);
-    const auto [cy, cx] = square_center_of_cell(cell);
-    return std::make_pair(cell_to_draw_y(cx), cell_to_draw_x(cy));
+    if (dmaze.show_as_hex) {
+      const auto [cx, cy] = hex_center_of_cell(cell);
+      return CellCorner(cell_to_draw_y(cx), cell_to_draw_x(cy));
+    } else {
+      const auto [cy, cx] = square_center_of_cell(cell);
+      return CellCorner(cell_to_draw_y(cx), cell_to_draw_x(cy));
+    }
   };
   auto cell_polygon = [&](auto cell) -> CellPoly {
     const auto &[row, col] = cell;
 
-    auto [fill_poly, segs] = square_cell_to_segment_coords(cell, dmaze);
-    // auto [fill_poly, segs] = hex_cell_to_segment_coords(cell, dmaze);
-    return {
-        .i = CellCorner{cell_to_draw_y(col + 0.5f), cell_to_draw_x(row + 0.5f)},
-        .fill_poly =
-            fill_poly | ranges::views::transform([&](auto pt) {
-              return CellCorner{cell_to_draw_y(pt.x), cell_to_draw_x(pt.y)};
-            }) |
-            ranges::to<std::vector>,
-        .segments = segs | ranges::views::transform([&](auto seg) {
-                      return CellSegment(
-                          // swap x,y
-                          cell_to_draw_y(seg.a.x), cell_to_draw_x(seg.a.y),
-                          cell_to_draw_y(seg.b.x), cell_to_draw_x(seg.b.y));
-                    }) |
-                    ranges::to<std::vector>,
-    };
+    if (dmaze.show_as_hex) {
+      auto [fill_poly, segs] = hex_cell_to_segment_coords(cell, dmaze);
+      return {
+          .i = center_of_cell(cell),
+          .fill_poly =
+              fill_poly | ranges::views::transform([&](auto pt) {
+                return CellCorner{cell_to_draw_y(pt.x), cell_to_draw_x(pt.y)};
+              }) |
+              ranges::to<std::vector>,
+          .segments = segs | ranges::views::transform([&](auto seg) {
+                        return CellSegment(
+                            // swap x,y
+                            cell_to_draw_y(seg.a.x), cell_to_draw_x(seg.a.y),
+                            cell_to_draw_y(seg.b.x), cell_to_draw_x(seg.b.y));
+                      }) |
+                      ranges::to<std::vector>,
+      };
+    } else {
+      auto [fill_poly, segs] = square_cell_to_segment_coords(cell, dmaze);
+      return {
+          .i = center_of_cell(cell),
+          .fill_poly =
+              fill_poly | ranges::views::transform([&](auto pt) {
+                return CellCorner{cell_to_draw_y(pt.x), cell_to_draw_x(pt.y)};
+              }) |
+              ranges::to<std::vector>,
+          .segments = segs | ranges::views::transform([&](auto seg) {
+                        return CellSegment(
+                            // swap x,y
+                            cell_to_draw_y(seg.a.x), cell_to_draw_x(seg.a.y),
+                            cell_to_draw_y(seg.b.x), cell_to_draw_x(seg.b.y));
+                      }) |
+                      ranges::to<std::vector>,
+      };
+    }
   };
 
   return draw_maze_common(window, dmaze, cell_polygon, center_of_cell,
@@ -672,6 +812,9 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
               break;
             case 's':
               dmaze->show_solution = !dmaze->show_solution;
+              break;
+            case 'x':
+              dmaze->show_as_hex = !dmaze->show_as_hex;
               break;
             case 'q':
               return;
