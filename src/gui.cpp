@@ -279,26 +279,34 @@ auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
       segments.emplace_back(x_near_east, y_north, x_near_east, y_north_inset);
     }
 
-    if (!dmaze.grid.connected_cell_east(cell)) {
-      segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset,
-                            y_mid);
-      segments.emplace_back(x_far_east_inset, y_mid, x_near_east,
-                            y_south_inset);
+    if (!dmaze.grid.connected_cell_north_east(cell)) {
+      // segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset, y_mid);
     } else {
-      if (even_col) {
-        segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset,
-                              y_mid);  // SQ Data hack
-
-        segments.emplace_back(x_far_east, y_mid, x_far_east_inset, y_mid);
-        segments.emplace_back(x_near_east, y_south_inset, x_near_east, y_south);
-      } else {
-        segments.emplace_back(x_far_east_inset, y_mid, x_near_east,
-                              y_south_inset);  // SQ Data hack
-
-        segments.emplace_back(x_far_east, y_mid, x_far_east_inset, y_mid);
-        segments.emplace_back(x_near_east, y_north_inset, x_near_east, y_north);
-      }
+      segments.emplace_back(x_far_east, y_mid, x_far_east_inset, y_mid);
+      segments.emplace_back(x_near_east, y_south_inset, x_near_east, y_south);
     }
+    if (!dmaze.grid.connected_cell_south_east(cell)) {
+      segments.emplace_back(x_far_east_inset, y_mid, x_near_east, y_south_inset);
+    } else {
+      segments.emplace_back(x_far_east, y_mid, x_far_east_inset, y_mid);
+      segments.emplace_back(x_near_east, y_south_inset, x_near_east, y_south);
+    }
+    // if (!dmaze.grid.connected_cell_east(cell)) {
+    //   segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset, y_mid);
+    //   segments.emplace_back(x_far_east_inset, y_mid, x_near_east, y_south_inset);
+    // } else {
+    //   if (even_col) {
+    //     segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset, y_mid);  // SQ Data hack
+
+    //     segments.emplace_back(x_far_east, y_mid, x_far_east_inset, y_mid);
+    //     segments.emplace_back(x_near_east, y_south_inset, x_near_east, y_south);
+    //   } else {
+    //     segments.emplace_back(x_far_east_inset, y_mid, x_near_east, y_south_inset);  // SQ Data hack
+
+    //     segments.emplace_back(x_far_east, y_mid, x_far_east_inset, y_mid);
+    //     segments.emplace_back(x_near_east, y_north_inset, x_near_east, y_north);
+    //   }
+    // }
 
     if (!dmaze.grid.connected_cell_south(cell)) {
       segments.emplace_back(x_near_east, y_south_inset, x_near_west,
@@ -308,26 +316,34 @@ auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
       segments.emplace_back(x_near_east, y_south, x_near_east, y_south_inset);
     }
 
-    if (!dmaze.grid.connected_cell_west(cell)) {
-      segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset,
-                            y_mid);
-      segments.emplace_back(x_far_west_inset, y_mid, x_near_west,
-                            y_north_inset);
+    if (!dmaze.grid.connected_cell_north_west(cell)) {
+      segments.emplace_back(x_far_west_inset, y_mid, x_near_west, y_north_inset);
     } else {
-      if (!even_col) {
-        segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset,
-                              y_mid);  // SQ Data hack
-
-        segments.emplace_back(x_far_west, y_mid, x_far_west_inset, y_mid);
-        segments.emplace_back(x_near_west, y_north_inset, x_near_west, y_north);
-      } else {
-        segments.emplace_back(x_far_west_inset, y_mid, x_near_west,
-                              y_north_inset);  // SQ Data hack
-
-        segments.emplace_back(x_far_west, y_mid, x_far_west_inset, y_mid);
-        segments.emplace_back(x_near_west, y_south_inset, x_near_west, y_south);
-      }
+      segments.emplace_back(x_far_west, y_mid, x_far_west_inset, y_mid);
+      segments.emplace_back(x_near_west, y_north_inset, x_near_west, y_north);
     }
+    if (!dmaze.grid.connected_cell_south_west(cell)) {
+      segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset, y_mid);
+    } else {
+      segments.emplace_back(x_far_west, y_mid, x_far_west_inset, y_mid);
+      segments.emplace_back(x_near_west, y_south_inset, x_near_west, y_south);
+    }
+    // if (!dmaze.grid.connected_cell_west(cell)) {
+    //   segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset, y_mid);
+    //   segments.emplace_back(x_far_west_inset, y_mid, x_near_west, y_north_inset);
+    // } else {
+    //   if (!even_col) {
+    //     segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset, y_mid);  // SQ Data hack
+
+    //     segments.emplace_back(x_far_west, y_mid, x_far_west_inset, y_mid);
+    //     segments.emplace_back(x_near_west, y_north_inset, x_near_west, y_north);
+    //   } else {
+    //     segments.emplace_back(x_far_west_inset, y_mid, x_near_west, y_north_inset);  // SQ Data hack
+
+    //     segments.emplace_back(x_far_west, y_mid, x_far_west_inset, y_mid);
+    //     segments.emplace_back(x_near_west, y_south_inset, x_near_west, y_south);
+    //   }
+    // }
 
     fill_poly.emplace_back(x_far_west_inset, y_mid);
     if (dmaze.grid.connected_cell_west(cell) && !even_col) {

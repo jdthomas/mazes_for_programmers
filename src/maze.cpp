@@ -150,10 +150,7 @@ bool operator==(const CellCoordinate &a, const CellCoordinate &b) {
   return a.row == b.row && a.col == b.col;
 }
 Grid::Grid(size_t width, size_t height)
-    : widths_(height, width),
-      height_{height},
-      cells_{width * height},
-      mdspan_{cells_.data(), height_, widths_.back()},
+    : DenseGridRepr(width, height),
       rd{},
       gen{rd()},
       mask(width * height),
