@@ -205,8 +205,8 @@ auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
   const auto a_size = s / 2.0f;
   const auto inset = 0.1f;
 
-  const bool even_row = cell.row % 2 == 0;
-  const bool even_col = cell.col % 2 == 0;
+  // const bool even_row = cell.row % 2 == 0;
+  // const bool even_col = cell.col % 2 == 0;
   const auto [cx, cy] = hex_center_of_cell(cell);
 
   const auto x_far_west = cx - s;
@@ -234,32 +234,26 @@ auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
       segments.emplace_back(x_near_west, y_north, x_near_east, y_north);
     }
 
-    if (!dmaze.grid.connected_cell_east(cell)) {
-      segments.emplace_back(x_near_east, y_north, x_far_east,
-                            y_mid);  // top '\' wall
-      segments.emplace_back(x_far_east, y_mid, x_near_east,
-                            y_south);  // bottom '/' wall
-    } else {
-      if (even_col) {
-        segments.emplace_back(x_near_east, y_north, x_far_east, y_mid);
-      } else {
-        segments.emplace_back(x_far_east, y_mid, x_near_east, y_south);
-      }
+    if (!dmaze.grid.connected_cell_north_east(cell)) {
+      // top '\' wall
+      segments.emplace_back(x_near_east, y_north, x_far_east, y_mid);
+    }
+
+    if (!dmaze.grid.connected_cell_south_east(cell)) {
+      // bottom '/' wall
+      segments.emplace_back(x_far_east, y_mid, x_near_east, y_south);
     }
 
     if (!dmaze.grid.connected_cell_south(cell)) {
       segments.emplace_back(x_near_east, y_south, x_near_west, y_south);
     }
 
-    if (!dmaze.grid.connected_cell_west(cell)) {
+    if (!dmaze.grid.connected_cell_south_west(cell)) {
       segments.emplace_back(x_near_west, y_south, x_far_west, y_mid);
+    }
+
+    if (!dmaze.grid.connected_cell_north_west(cell)) {
       segments.emplace_back(x_far_west, y_mid, x_near_west, y_north);
-    } else {
-      if (!even_col) {
-        segments.emplace_back(x_near_west, y_south, x_far_west, y_mid);
-      } else {
-        segments.emplace_back(x_far_west, y_mid, x_near_west, y_north);
-      }
     }
 
     fill_poly.emplace_back(x_far_west, y_mid);
@@ -274,37 +268,45 @@ auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
       segments.emplace_back(x_near_west, y_north_inset, x_near_east,
                             y_north_inset);
     } else {
-      // TODO: really only want to draw thesse based on if there is a wall next to them
+      // TODO: really only want to draw thesse based on if there is a wall next
+      // to them
       segments.emplace_back(x_near_west, y_north, x_near_west, y_north_inset);
       segments.emplace_back(x_near_east, y_north, x_near_east, y_north_inset);
     }
 
     if (!dmaze.grid.connected_cell_north_east(cell)) {
-      // segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset, y_mid);
+      segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset,
+                            y_mid);
     } else {
       segments.emplace_back(x_far_east, y_mid, x_far_east_inset, y_mid);
       segments.emplace_back(x_near_east, y_south_inset, x_near_east, y_south);
     }
     if (!dmaze.grid.connected_cell_south_east(cell)) {
-      segments.emplace_back(x_far_east_inset, y_mid, x_near_east, y_south_inset);
+      segments.emplace_back(x_far_east_inset, y_mid, x_near_east,
+                            y_south_inset);
     } else {
       segments.emplace_back(x_far_east, y_mid, x_far_east_inset, y_mid);
       segments.emplace_back(x_near_east, y_south_inset, x_near_east, y_south);
     }
     // if (!dmaze.grid.connected_cell_east(cell)) {
-    //   segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset, y_mid);
-    //   segments.emplace_back(x_far_east_inset, y_mid, x_near_east, y_south_inset);
+    //   segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset,
+    //   y_mid); segments.emplace_back(x_far_east_inset, y_mid, x_near_east,
+    //   y_south_inset);
     // } else {
     //   if (even_col) {
-    //     segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset, y_mid);  // SQ Data hack
+    //     segments.emplace_back(x_near_east, y_north_inset, x_far_east_inset,
+    //     y_mid);  // SQ Data hack
 
     //     segments.emplace_back(x_far_east, y_mid, x_far_east_inset, y_mid);
-    //     segments.emplace_back(x_near_east, y_south_inset, x_near_east, y_south);
+    //     segments.emplace_back(x_near_east, y_south_inset, x_near_east,
+    //     y_south);
     //   } else {
-    //     segments.emplace_back(x_far_east_inset, y_mid, x_near_east, y_south_inset);  // SQ Data hack
+    //     segments.emplace_back(x_far_east_inset, y_mid, x_near_east,
+    //     y_south_inset);  // SQ Data hack
 
     //     segments.emplace_back(x_far_east, y_mid, x_far_east_inset, y_mid);
-    //     segments.emplace_back(x_near_east, y_north_inset, x_near_east, y_north);
+    //     segments.emplace_back(x_near_east, y_north_inset, x_near_east,
+    //     y_north);
     //   }
     // }
 
@@ -317,36 +319,43 @@ auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
     }
 
     if (!dmaze.grid.connected_cell_north_west(cell)) {
-      segments.emplace_back(x_far_west_inset, y_mid, x_near_west, y_north_inset);
+      segments.emplace_back(x_far_west_inset, y_mid, x_near_west,
+                            y_north_inset);
     } else {
       segments.emplace_back(x_far_west, y_mid, x_far_west_inset, y_mid);
       segments.emplace_back(x_near_west, y_north_inset, x_near_west, y_north);
     }
     if (!dmaze.grid.connected_cell_south_west(cell)) {
-      segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset, y_mid);
+      segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset,
+                            y_mid);
     } else {
       segments.emplace_back(x_far_west, y_mid, x_far_west_inset, y_mid);
       segments.emplace_back(x_near_west, y_south_inset, x_near_west, y_south);
     }
     // if (!dmaze.grid.connected_cell_west(cell)) {
-    //   segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset, y_mid);
-    //   segments.emplace_back(x_far_west_inset, y_mid, x_near_west, y_north_inset);
+    //   segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset,
+    //   y_mid); segments.emplace_back(x_far_west_inset, y_mid, x_near_west,
+    //   y_north_inset);
     // } else {
     //   if (!even_col) {
-    //     segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset, y_mid);  // SQ Data hack
+    //     segments.emplace_back(x_near_west, y_south_inset, x_far_west_inset,
+    //     y_mid);  // SQ Data hack
 
     //     segments.emplace_back(x_far_west, y_mid, x_far_west_inset, y_mid);
-    //     segments.emplace_back(x_near_west, y_north_inset, x_near_west, y_north);
+    //     segments.emplace_back(x_near_west, y_north_inset, x_near_west,
+    //     y_north);
     //   } else {
-    //     segments.emplace_back(x_far_west_inset, y_mid, x_near_west, y_north_inset);  // SQ Data hack
+    //     segments.emplace_back(x_far_west_inset, y_mid, x_near_west,
+    //     y_north_inset);  // SQ Data hack
 
     //     segments.emplace_back(x_far_west, y_mid, x_far_west_inset, y_mid);
-    //     segments.emplace_back(x_near_west, y_south_inset, x_near_west, y_south);
+    //     segments.emplace_back(x_near_west, y_south_inset, x_near_west,
+    //     y_south);
     //   }
     // }
 
     fill_poly.emplace_back(x_far_west_inset, y_mid);
-    if (dmaze.grid.connected_cell_west(cell) && !even_col) {
+    if (dmaze.grid.connected_cell_north_west(cell)) {
       fill_poly.emplace_back(x_far_west, y_mid);
       fill_poly.emplace_back(x_near_west, y_north);
     }
@@ -356,12 +365,12 @@ auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
       fill_poly.emplace_back(x_near_east, y_north);
     }
     fill_poly.emplace_back(x_near_east, y_north_inset);
-    if (dmaze.grid.connected_cell_east(cell) && !even_col) {
+    if (dmaze.grid.connected_cell_north_east(cell)) {
       fill_poly.emplace_back(x_near_east, y_north);
       fill_poly.emplace_back(x_far_east, y_mid);
     }
     fill_poly.emplace_back(x_far_east_inset, y_mid);
-    if (dmaze.grid.connected_cell_east(cell) && even_col) {
+    if (dmaze.grid.connected_cell_south_east(cell)) {
       fill_poly.emplace_back(x_far_east, y_mid);
       fill_poly.emplace_back(x_near_east, y_south);
     }
@@ -371,7 +380,7 @@ auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
       fill_poly.emplace_back(x_near_west, y_south);
     }
     fill_poly.emplace_back(x_near_west, y_south_inset);
-    if (dmaze.grid.connected_cell_west(cell) && even_col) {
+    if (dmaze.grid.connected_cell_south_west(cell)) {
       fill_poly.emplace_back(x_near_west, y_south);
       fill_poly.emplace_back(x_far_west, y_mid);
     }
@@ -767,6 +776,7 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
       }
     }
   };
+  bool rot45 = false;
 
   // run the program as long as the window is open
   while (window.isOpen()) {
@@ -832,6 +842,9 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
             case 'x':
               dmaze->show_as_hex = !dmaze->show_as_hex;
               break;
+            case 'z':
+              rot45 = !rot45;
+              break;
             case 'q':
               return;
               break;
@@ -842,20 +855,28 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
               need_regen = true;
               break;
             case sf::Keyboard::Left:
-              player_move(
-                  dmaze->grid.connected_cell_west(dmaze->player_path.back()));
+              player_move(rot45 ? dmaze->grid.connected_cell_north_west(
+                                      dmaze->player_path.back())
+                                : dmaze->grid.connected_cell_west(
+                                      dmaze->player_path.back()));
               break;
             case sf::Keyboard::Right:
-              player_move(
-                  dmaze->grid.connected_cell_east(dmaze->player_path.back()));
+              player_move(rot45 ? dmaze->grid.connected_cell_south_east(
+                                      dmaze->player_path.back())
+                                : dmaze->grid.connected_cell_east(
+                                      dmaze->player_path.back()));
               break;
             case sf::Keyboard::Down:
-              player_move(
-                  dmaze->grid.connected_cell_south(dmaze->player_path.back()));
+              player_move(rot45 ? dmaze->grid.connected_cell_south_west(
+                                      dmaze->player_path.back())
+                                : dmaze->grid.connected_cell_south(
+                                      dmaze->player_path.back()));
               break;
             case sf::Keyboard::Up:
-              player_move(
-                  dmaze->grid.connected_cell_north(dmaze->player_path.back()));
+              player_move(rot45 ? dmaze->grid.connected_cell_north_east(
+                                      dmaze->player_path.back())
+                                : dmaze->grid.connected_cell_north(
+                                      dmaze->player_path.back()));
               break;
             default:
               break;

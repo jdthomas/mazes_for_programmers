@@ -37,8 +37,6 @@ auto jt_range_front(R &&rng) {
              : std::make_optional(*ranges::begin(rng));
 }
 
-enum class Wall { Solid, Open, Boundry };
-
 struct CellCoordinate {
   size_t row, col;
 };
@@ -57,11 +55,8 @@ struct GridReprCommon {
   GridReprCommon(size_t width, size_t height)
       : widths_(height, width), height_{height} {};
 
-  size_t height_;
-  std::vector<size_t> widths_;
+ protected:
   static constexpr CellShape cs = CellShape::Square;
-
-  bool allow_ew_wrap = true;
 
   using AdjacentCells = std::array<std::optional<CellCoordinate>, 8>;
   enum class Direction { N, NE, E, SE, S, SW, W, NW };
@@ -75,34 +70,33 @@ struct GridReprCommon {
     // Square
     if constexpr (CellShape::Square == cs) {
       return {
-          CellCoordinate{(c.row - 1 + h) % h, (c.col + 0 + w) % w},  // North
-          std::nullopt,  // NorthEast
-          CellCoordinate{(c.row + 0 + h) % h, (c.col + 1 + w) % w},  // East
-          std::nullopt,  // SouthEast
-          CellCoordinate{(c.row + 1 + h) % h, (c.col - 0 + w) % w},  // South
-          std::nullopt,  // SouthWest
-          CellCoordinate{(c.row - 0 + h) % h, (c.col - 1 + w) % w},  // West
-          std::nullopt,  // NorthWest
+          CellCoordinate{(c.row - 1 + h) % h, (c.col + 0 + w) % w},  // N
+          std::nullopt,                                              // NE
+          CellCoordinate{(c.row + 0 + h) % h, (c.col + 1 + w) % w},  // E
+          std::nullopt,                                              // SE
+          CellCoordinate{(c.row + 1 + h) % h, (c.col - 0 + w) % w},  // S
+          std::nullopt,                                              // SW
+          CellCoordinate{(c.row - 0 + h) % h, (c.col - 1 + w) % w},  // W
+          std::nullopt,                                              // NW
       };
     }
     // Hex
     if constexpr (CellShape::Hex == cs) {
-      const ssize_t dn = c.col % 2 ? 1 : 0;
-      const ssize_t ds = c.col % 2 ? 0 : 1;
+      const bool even_col = c.col % 2 == 0;
+      const ssize_t diag_north = even_col ? -1 : 0;
+      const ssize_t diag_south = even_col ? 0 : 1;
+      const auto wrap_h = [&](ssize_t row) { return (row + h) % h; };
+      const auto wrap_w = [&](ssize_t col) { return (col + w) % w; };
 
       return {
-          CellCoordinate{(c.row - 1 + h) % h, (c.col + 0 + w) % w},  // North
-          CellCoordinate{(c.row - dn + h) % h,
-                         (c.col - 1 + w) % w},  // NorthEast
-          std::nullopt,                         // East
-          CellCoordinate{(c.row + ds + h) % h,
-                         (c.col + 1 + w) % w},  // SouthEast
-          CellCoordinate{(c.row + 1 + h) % h, (c.col - 0 + w) % w},  // South
-          CellCoordinate{(c.row + ds + h) % h,
-                         (c.col + 1 + w) % w},  // SouthWest
-          std::nullopt,                         // West
-          CellCoordinate{(c.row - dn + h) % h,
-                         (c.col - 1 + w) % w},  // NorthWest
+          CellCoordinate{wrap_h(c.row - 1), c.col},                       // N
+          CellCoordinate{wrap_h(c.row + diag_north), wrap_w(c.col + 1)},  // NE
+          std::nullopt,                                                   // E
+          CellCoordinate{wrap_h(c.row + diag_south), wrap_w(c.col + 1)},  // SE
+          CellCoordinate{wrap_h(c.row + 1), c.col},                       // S
+          CellCoordinate{wrap_h(c.row + diag_south), wrap_w(c.col - 1)},  // SW
+          std::nullopt,                                                   // W
+          CellCoordinate{wrap_h(c.row + diag_north), wrap_w(c.col - 1)},  // NW
       };
     }
     // Variable width?
@@ -116,6 +110,24 @@ struct GridReprCommon {
     //   cell.inward = parent
     // end
   };
+
+ public:
+  bool allow_ew_wrap = true;
+  size_t height_;
+  std::vector<size_t> widths_;
+
+  // Helper to generate all CellCoordinate for each cell
+  auto positions() const {
+    return ranges::views::cartesian_product(
+               ranges::views::iota(static_cast<size_t>(0),
+                                   static_cast<size_t>(height_)),
+               ranges::views::iota(static_cast<size_t>(0),
+                                   static_cast<size_t>(widths_.back()))) |
+           ranges::views::transform([](const auto &p) {
+             const auto &[row, col] = p;
+             return CellCoordinate{row, col};
+           });
+  }
 
   // Helpers to get neighboring CellCoordinate for each direction
   auto cell_north(CellCoordinate c) const {
@@ -134,39 +146,38 @@ struct GridReprCommon {
   auto cell_north_west(CellCoordinate c) const {
     if constexpr (cs == CellShape::Square) {
       const bool even_col = c.col % 2 == 0;
-      return even_col
-                 ? std::nullopt
-                 : get_all_neighbors_(c)[to_underlying(Direction::W)];
+      return even_col ? std::nullopt
+                      : get_all_neighbors_(c)[to_underlying(Direction::W)];
     } else {
       return get_all_neighbors_(c)[to_underlying(Direction::NW)];
     }
   }
+
   auto cell_north_east(CellCoordinate c) const {
     if constexpr (cs == CellShape::Square) {
       const bool even_col = c.col % 2 == 0;
-      return even_col
-                 ? std::nullopt
-                 : get_all_neighbors_(c)[to_underlying(Direction::E)];
+      return even_col ? std::nullopt
+                      : get_all_neighbors_(c)[to_underlying(Direction::E)];
     } else {
       return get_all_neighbors_(c)[to_underlying(Direction::NE)];
     }
   }
+
   auto cell_south_west(CellCoordinate c) const {
     if constexpr (cs == CellShape::Square) {
       const bool even_col = c.col % 2 == 0;
-      return !even_col
-                 ? std::nullopt
-                 : get_all_neighbors_(c)[to_underlying(Direction::W)];
+      return !even_col ? std::nullopt
+                       : get_all_neighbors_(c)[to_underlying(Direction::W)];
     } else {
       return get_all_neighbors_(c)[to_underlying(Direction::SW)];
     }
   }
+
   auto cell_south_east(CellCoordinate c) const {
     if constexpr (cs == CellShape::Square) {
       const bool even_col = c.col % 2 == 0;
-      return !even_col
-                 ? std::nullopt
-                 : get_all_neighbors_(c)[to_underlying(Direction::W)];
+      return !even_col ? std::nullopt
+                       : get_all_neighbors_(c)[to_underlying(Direction::E)];
     } else {
       return get_all_neighbors_(c)[to_underlying(Direction::SE)];
     }
@@ -238,7 +249,7 @@ struct GridReprCommon {
 
   // Helpers for getting all connected neighbors
   AdjacentCells get_connected_neighbors_(CellCoordinate c) const {
-    auto neighbors = adjacent_cells(c);
+    auto neighbors = get_all_neighbors_(c);
     neighbors |= ranges::actions::transform(
         [this, c](auto n) { return n && is_linked(c, *n) ? n : std::nullopt; });
     return neighbors;
@@ -279,11 +290,25 @@ struct SparceGridRepr : GridReprCommon {
 struct DenseGridRepr : GridReprCommon {
   DenseGridRepr(size_t width, size_t height)
       : GridReprCommon(width, height),
-        grid_{width * height},
+        grid_{width * height, a_closed_cell},
         grid_view_{grid_.data(), height_, widths_.back()} {};
+  // enum class Direction { N, NE, E, SE, S, SW, W, NW };
   struct Cell {
-    Wall down, right;
+    union {
+      uint8_t walls;
+      struct {
+        uint8_t n : 1;
+        uint8_t ne : 1;
+        uint8_t e : 1;
+        uint8_t se : 1;
+        uint8_t s : 1;
+        uint8_t sw : 1;
+        uint8_t w : 1;
+        uint8_t nw : 1;
+      };
+    };
   };
+  static constexpr Cell a_closed_cell{0xff};
 
   std::vector<Cell> grid_;
   stdex::mdspan<Cell,
@@ -293,66 +318,29 @@ struct DenseGridRepr : GridReprCommon {
   auto as_mdspan() const { return grid_view_; }
 
   bool is_linked(CellCoordinate c1, CellCoordinate c2) const override {
-    auto &[row_1, col_1] = c1;
-    auto &[row_2, col_2] = c2;
-    ssize_t dx = col_2 - col_1;
-    ssize_t dy = row_2 - row_1;
-    auto m = as_mdspan();
-    if (dx == -1 || dx == widths_[row_1] - 1) {
-      return m(row_1, (widths_[row_1] + col_1 - 1) % widths_[row_1]).right ==
-             Wall::Open;
-    } else if (dx == 1 || dx == -widths_[row_1] + 1) {
-      return m(row_1, col_1).right == Wall::Open;
-    } else if (dy == -1) {
-      return m(row_1 - 1, col_1).down == Wall::Open;
-    } else if (dy == 1) {
-      return m(row_1, col_1).down == Wall::Open;
+    auto neighbors = get_all_neighbors_(c1);
+    auto n = ranges::find_if(neighbors, [c2](auto n) { return n && *n == c2; });
+    if (n == neighbors.end()) {
+      throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1, c2));
+      return false;
     }
-    return false;
+    return (grid_view_(c1.row, c1.col).walls &
+            (1 << ranges::distance(neighbors.begin(), n))) == 0;
   }
 
   // Helper for linking two cells togetherr (must be neighbors)
   void link(CellCoordinate c1, CellCoordinate c2) override {
-    auto &[row_1, col_1] = c1;
-    auto &[row_2, col_2] = c2;
-    ssize_t dx = col_2 - col_1;
-    ssize_t dy = row_2 - row_1;
-    // fmt::print("linking: {} to {} delta: {}.{}\n", c1, c2, dx, dy);
-    // if (std::abs(dx) > 1 || std::abs(dy) > 1 ||
-    //     (std::abs(dx) > 0 && std::abs(dy) > 0))
-    //   throw std::runtime_error("Linking cells must be neighbors");
-
-    auto m = as_mdspan();
-    if (dx == -1 || dx == widths_[row_1] - 1) {
-      m(row_1, (widths_[row_1] + col_1 - 1) % widths_[row_1]).right =
-          Wall::Open;
-      // fmt::print("Setting right of {} {}\n", col_1 - 1, row_1);
-    } else if (dx == 1 || dx == -widths_[row_1] + 1) {
-      m(row_1, col_1).right = Wall::Open;
-      // fmt::print("Setting right of {} {}\n", col_1, row_1);
-    } else if (dy == -1) {
-      m(row_1 - 1, col_1).down = Wall::Open;
-      // fmt::print("Setting down of {} {}\n", col_1, row_1 - 1);
-    } else if (dy == 1) {
-      m(row_1, col_1).down = Wall::Open;
-      // fmt::print("Setting down of {} {}\n", col_1, row_1);
-    } else {
-      throw std::runtime_error(
-          fmt::format("Bad neighbor: {} -> {}, dx={}", c1, c2, dx));
-    }
+    link_(c1, c2);
+    link_(c2, c1);
   }
-
-  // Helper to generate all CellCoordinate for each cell
-  auto positions() const {
-    return ranges::views::cartesian_product(
-               ranges::views::iota(static_cast<size_t>(0),
-                                   static_cast<size_t>(height_)),
-               ranges::views::iota(static_cast<size_t>(0),
-                                   static_cast<size_t>(widths_.back()))) |
-           ranges::views::transform([](const auto &p) {
-             const auto &[row, col] = p;
-             return CellCoordinate{row, col};
-           });
+  void link_(CellCoordinate c1, CellCoordinate c2) {
+    auto neighbors = get_all_neighbors_(c1);
+    auto n = ranges::find_if(neighbors, [c2](auto n) { return n && *n == c2; });
+    if (n == neighbors.end()) {
+      throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1, c2));
+    }
+    grid_view_(c1.row, c1.col).walls &=
+        ~(1 << ranges::distance(neighbors.begin(), n));
   }
 
   auto &operator()(CellCoordinate cell) const {
@@ -362,12 +350,7 @@ struct DenseGridRepr : GridReprCommon {
   }
 
   // Reset grid to all solid walls
-  void reset() {
-    for (auto &c : grid_) {
-      c.down = Wall::Solid;
-      c.right = Wall::Solid;
-    }
-  }
+  void reset() { ranges::fill(grid_, a_closed_cell); }
 };
 
 struct Grid : DenseGridRepr {
@@ -546,16 +529,6 @@ void ensure_registry();
 ////////////////////////////////////////////////////////////////////////////////
 // Ascii output
 ////////////////////////////////////////////////////////////////////////////////
-static char h_wall_to_char(const jt::maze::Wall wall) {
-  return wall == jt::maze::Wall::Open    ? ' '
-         : wall == jt::maze::Wall::Solid ? '-'
-                                         : 'X';
-}
-static char v_wall_to_char(const jt::maze::Wall wall) {
-  return wall == jt::maze::Wall::Open    ? ' '
-         : wall == jt::maze::Wall::Solid ? '|'
-                                         : 'X';
-}
 
 template <>
 struct fmt::formatter<jt::maze::CellCoordinate> {
@@ -592,6 +565,7 @@ constexpr auto fmt::formatter<jt::maze::Grid>::parse(ParseContext &ctx) {
   return ctx.begin();
 }
 
+// TODO: Restore these to work on the generic operations
 template <typename FormatContext>
 auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
                                             FormatContext &ctx) {
@@ -600,7 +574,7 @@ auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
   }
   // Draw an initial boundry
   for (int col = 0; col < grid.widths_.back(); col++) {
-    auto c = h_wall_to_char(jt::maze::Wall::Boundry);
+    auto c = '-';
     fmt::format_to(ctx.out(), "{}{}{}+", c, c, c);
   }
   fmt::format_to(ctx.out(), "\n");
@@ -608,15 +582,16 @@ auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
   for (size_t row = 0; row < grid.height_; row++) {
     // Draw verticals
     for (size_t col = 0; col < grid.widths_.back(); col++) {
-      fmt::format_to(
-          ctx.out(), "   {}",
-          v_wall_to_char(grid(jt::maze::CellCoordinate{row, col}).right));
+      char c = grid(jt::maze::CellCoordinate{row, col}).e ? '|' : ' ';
+      // v_wall_to_char(grid(jt::maze::CellCoordinate{row, col}).right)
+      fmt::format_to(ctx.out(), "   {}", c);
     }
     fmt::format_to(ctx.out(), "\n");
 
     // Draw horizantals
     for (size_t col = 0; col < grid.widths_.back(); col++) {
-      auto c = h_wall_to_char(grid(jt::maze::CellCoordinate{row, col}).down);
+      // auto c = h_wall_to_char(grid(jt::maze::CellCoordinate{row, col}).down);
+      char c = grid(jt::maze::CellCoordinate{row, col}).s ? '-' : ' ';
       fmt::format_to(ctx.out(), "{}{}{}+", c, c, c);
     }
     fmt::format_to(ctx.out(), "\n");

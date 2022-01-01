@@ -155,13 +155,6 @@ Grid::Grid(size_t width, size_t height)
       gen{rd()},
       mask(width * height),
       mask_as_mdspan_{mask.data(), height_, widths_.back()} {
-  auto m = as_mdspan();
-  for (int row = 0; row < m.extent(0); row++) {
-    m(row, m.extent(1) - 1).right = Wall::Boundry;
-  }
-  for (int col = 0; col < m.extent(1); col++) {
-    m(m.extent(0) - 1, col).down = Wall::Boundry;
-  }
 };
 
 std::vector<GeneratorRegistry::RegistryConfig> GeneratorRegistry::registry_{};
