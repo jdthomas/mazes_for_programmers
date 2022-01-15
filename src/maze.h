@@ -99,6 +99,30 @@ struct GridReprCommon {
           CellCoordinate{wrap_h(c.row + diag_north), wrap_w(c.col - 1)},  // NW
       };
     }
+
+#if 0
+    if constexpr (CellShape::Triangle == cs) {
+      const bool even_row = c.row % 2 == 0;
+      return {
+          !even_row
+              ? std::nullopt
+              : CellCoordinate{(c.row - 1 + h) % h, (c.col + w) % w},      // N
+          !even_row
+              ? std::nullopt
+              : CellCoordinate{(c.row - 1 + h) % h, (c.col + 1 + w) % w},  // NE
+          std::nullopt,                                                    // E
+          even_row ? std::nullopt
+              : CellCoordinate{(c.row + 1 + h) % h, (c.col + 1 + w) % w},  // SE
+          even_row ? std::nullopt
+                   : CellCoordinate{(c.row + 1 + h) % h, (c.col + w) % w}, // S
+          even_row ? std::nullopt
+              : CellCoordinate{(c.row + 1 + h) % h, (c.col - 1 + w) % w},  // SW
+          std::nullopt,                                                    // W
+          !even_row ? std::nullopt
+              : CellCoordinate{(c.row - 1 + h) % h, (c.col - 1 + w) % w},  // NW
+      };
+    }
+#endif
     // Variable width?
     // TODO: From book on polar grid
     // if row > 0
@@ -271,9 +295,36 @@ struct GridReprCommon {
     return count_connected_neighbors(c) == 1;
   }
 
+  bool is_h_passage_cell(CellCoordinate c) const {
+    return !connected_cell_north(c) && !connected_cell_south(c) &&
+           connected_cell_east(c) && connected_cell_west(c);
+  }
+  bool is_v_passage_cell(CellCoordinate c) const {
+    return connected_cell_north(c) && connected_cell_south(c) &&
+           !connected_cell_east(c) && !connected_cell_west(c);
+  }
+
+  bool can_tunnel_north(CellCoordinate c) {
+    auto n = cell_north(c);
+    return  n && cell_north(*n) && is_h_passage_cell(*n);
+  }
+  bool can_tunnel_south(CellCoordinate c) {
+    auto n = cell_south(c);
+    return  n && cell_south(*n) && is_h_passage_cell(*n);
+  }
+  bool can_tunnel_west(CellCoordinate c) {
+    auto n = cell_west(c);
+    return  n && cell_west(*n) && is_v_passage_cell(*n);
+  }
+  bool can_tunnel_east(CellCoordinate c) {
+    auto n = cell_east(c);
+    return  n && cell_east(*n) && is_v_passage_cell(*n);
+  }
+
   // these depend on the grid reprensation
   virtual bool is_linked(CellCoordinate c1, CellCoordinate c2) const = 0;
   virtual void link(CellCoordinate c1, CellCoordinate c2) = 0;
+
 };
 
 struct SparceGridRepr : GridReprCommon {
@@ -306,7 +357,14 @@ struct DenseGridRepr : GridReprCommon {
         uint8_t w : 1;
         uint8_t nw : 1;
       };
+      uint8_t flags;
     };
+    enum class Flags : uint8_t {
+      UnderCellLR = 1,
+      UnderCellUD = 2,
+    };
+    void set_flag(Flags f) { flags |= to_underlying(f); }
+    bool check_flag(Flags f) const { return 0 != (to_underlying(f) & flags); }
   };
   static constexpr Cell a_closed_cell{0xff};
 
