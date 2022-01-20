@@ -21,6 +21,7 @@ namespace pstl = std;
 #include <range/v3/all.hpp>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "maze.h"
@@ -254,10 +255,71 @@ void recursive_backtracking_maze(Grid &grid) {
 GeneratorRegistry::RegisterGenerator r('R', "RecursiveBacktracking",
                                        recursive_backtracking_maze);
 
+void kruskel_maze(Grid &grid) {
+  // n a nutshell, then, the algorithm is:
+  //      1. Assign each cell to its own set.
+  //      2. Choose the pair of neighboring cells with the lowest cost passage
+  //      between them.
+  //      3. If the two cells belong to different sets, merge them.
+  //      4. Repeat 2 and 3 until only a single set remains
+  std::unordered_map<CellCoordinate, int, cell_coordinate_hash_fn>
+      set_for_cell{};
+  std::unordered_map<int, std::set<CellCoordinate>> cells_in_set{};
+  std::vector<std::pair<CellCoordinate, CellCoordinate>> neighbors;
+  auto can_merge = [&](auto left, auto right) {
+    // fmt::print("Can merge {} to {}? {} == {}\n", left, right,
+    // set_for_cell[left], set_for_cell[right]);
+    return set_for_cell[left] != set_for_cell[right];
+  };
+  auto merge = [&](auto left, auto right) {
+    grid.link(left, right);
+    auto winner = set_for_cell[left];
+    auto loser = set_for_cell[right];
+    auto &losers = cells_in_set[loser];
+
+    // fmt::print("Linking: {} ({}) to {} ({}) -- {}\n", left, winner, right,
+    // loser, losers);
+
+    // Add the loser set items to the winner set
+    cells_in_set[winner].merge(losers);
+    // And update all of those to same set
+    for (const auto &cell : cells_in_set[winner]) {
+      // fmt::print("moving {} to {} (was {})\n", cell, winner,
+      // set_for_cell[cell]);
+      set_for_cell[cell] = winner;
+    }
+    // And blow away loser set
+    cells_in_set.erase(loser);
+  };
+  // Init State
+  auto p = grid.positions();
+  for (auto x : ranges::views::enumerate(p)) {
+    auto &[i, cell] = x;
+    set_for_cell[cell] = int(i);
+    cells_in_set[int(i)].insert(cell);
+    {
+      auto south = grid.cell_south(cell);
+      auto east = grid.cell_east(cell);
+      if (south) neighbors.emplace_back(cell, *south);
+      if (east) neighbors.emplace_back(cell, *east);
+    }
+  }
+  // Impl
+  std::shuffle(neighbors.begin(), neighbors.end(), grid.gen);
+  while (!neighbors.empty()) {
+    auto [left, right] = neighbors.back();
+    neighbors.pop_back();
+    if (can_merge(left, right)) {
+      merge(left, right);
+    }
+  }
+  // fmt::print("state: \n\t{} \n\n\t{}\n", set_for_cell, cells_in_set);
+}
+GeneratorRegistry::RegisterGenerator kr('U', "Kruskel", kruskel_maze);
+
 void all_walls_maze(Grid &grid) {
   // default is all walls
 }
-GeneratorRegistry::RegisterGenerator z('Z', "AllWalls",
-                                       all_walls_maze);
+GeneratorRegistry::RegisterGenerator z('Z', "AllWalls", all_walls_maze);
 
 };  // namespace jt::maze

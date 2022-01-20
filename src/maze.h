@@ -43,6 +43,16 @@ struct CellCoordinate {
 
 bool operator<(const CellCoordinate &a, const CellCoordinate &b);
 bool operator==(const CellCoordinate &a, const CellCoordinate &b);
+struct cell_coordinate_hash_fn
+{
+    std::size_t operator() (const CellCoordinate &cell) const
+    {
+        std::size_t h1 = std::hash<size_t>()(cell.row);
+        std::size_t h2 = std::hash<size_t>()(cell.col);
+
+        return h1 ^ h2;
+    }
+};
 
 struct GridMask {
   size_t width, height;
