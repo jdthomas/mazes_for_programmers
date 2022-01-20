@@ -291,6 +291,36 @@ void kruskel_maze(Grid &grid) {
     // And blow away loser set
     cells_in_set.erase(loser);
   };
+  auto add_crossing = [&](auto cell) -> bool {
+    auto n = grid.cell_north(cell);
+    auto e = grid.cell_east(cell);
+    auto s = grid.cell_south(cell);
+    auto w = grid.cell_west(cell);
+
+    if (!grid.is_closed_cell(cell) || !e || !w || !can_merge(*e, *w) || !n ||
+        !s || !can_merge(*n, *s)) {
+      return false;
+    }
+    neighbors.erase(std::remove_if(neighbors.begin(), neighbors.end(),
+                                   [&](auto n) {
+                                     auto &[left, right] = n;
+                                     return left == cell || right == cell;
+                                   }),
+                    neighbors.end());
+
+    std::bernoulli_distribution d(0.5);
+    if (d(grid.gen)) {
+      merge(*w, cell);
+      merge(cell, *e);
+      merge(*n, *s);
+    } else {
+      merge(*n, cell);
+      merge(*s, cell);
+      merge(*w, *e);
+    }
+    return true;
+  };
+
   // Init State
   auto p = grid.positions();
   for (auto x : ranges::views::enumerate(p)) {
@@ -302,6 +332,14 @@ void kruskel_maze(Grid &grid) {
       auto east = grid.cell_east(cell);
       if (south) neighbors.emplace_back(cell, *south);
       if (east) neighbors.emplace_back(cell, *east);
+    }
+  }
+  // crossings
+  if (grid.enable_weaving) {
+    // TODO: Paramatarize how many crosses to attempt adding
+    for (int i = 0; i < grid.widths_.back() * grid.height_; i++) {
+      auto c = grid.random_cell();
+      add_crossing(c);
     }
   }
   // Impl
