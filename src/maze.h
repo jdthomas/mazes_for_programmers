@@ -136,7 +136,8 @@ struct GridReprCommon {
   };
 
  public:
-  bool allow_ew_wrap = true;
+  bool allow_ew_wrap = false;
+  bool enable_weaving = true;
   size_t height_;
   std::vector<size_t> widths_;
 
@@ -207,21 +208,46 @@ struct GridReprCommon {
     }
   }
 
+  bool is_crossing_undercell(CellCoordinate over, CellCoordinate under) const {
+    return is_under_cell(under) && is_linked(over, under) &&
+           !is_linked(under, over);
+  }
+
+  bool is_connected_directly_north(CellCoordinate c) const {
+    auto n = cell_north(c);
+    return n && is_linked(c, *n) ;
+  }
+  bool is_connected_directly_west(CellCoordinate c) const {
+    auto n = cell_west(c);
+    return n && is_linked(c, *n) ;
+  }
+  bool is_connected_directly_south(CellCoordinate c) const {
+    auto n = cell_south(c);
+    return n && is_linked(c, *n) ;
+  }
+  bool is_connected_directly_east(CellCoordinate c) const {
+    auto n = cell_east(c);
+    return n && is_linked(c, *n) ;
+  }
   //
   auto connected_cell_north(CellCoordinate c) const {
     auto n = cell_north(c);
+    if (enable_weaving && n && is_crossing_undercell(c, *n)) return cell_north(*n);
     return n && is_linked(c, *n) ? n : std::nullopt;
   }
   auto connected_cell_east(CellCoordinate c) const {
     auto n = cell_east(c);
+    if (enable_weaving && n && is_crossing_undercell(c, *n)) return cell_east(*n);
     return n && is_linked(c, *n) ? n : std::nullopt;
   }
   auto connected_cell_south(CellCoordinate c) const {
     auto n = cell_south(c);
+    if (enable_weaving && n && is_crossing_undercell(c, *n)) return cell_south(*n);
     return n && is_linked(c, *n) ? n : std::nullopt;
   }
   auto connected_cell_west(CellCoordinate c) const {
     auto n = cell_west(c);
+    if (enable_weaving && n && is_crossing_undercell(c, *n)) return cell_west(*n);
     return n && is_linked(c, *n) ? n : std::nullopt;
   }
 
@@ -304,27 +330,27 @@ struct GridReprCommon {
            !connected_cell_east(c) && !connected_cell_west(c);
   }
 
-  bool can_tunnel_north(CellCoordinate c) {
+  bool can_tunnel_north(CellCoordinate c) const {
     auto n = cell_north(c);
-    return  n && cell_north(*n) && is_h_passage_cell(*n);
+    return n && cell_north(*n) && !is_under_cell(*n) && is_h_passage_cell(*n);
   }
-  bool can_tunnel_south(CellCoordinate c) {
+  bool can_tunnel_south(CellCoordinate c) const {
     auto n = cell_south(c);
-    return  n && cell_south(*n) && is_h_passage_cell(*n);
+    return n && cell_south(*n) && !is_under_cell(*n) && is_h_passage_cell(*n);
   }
-  bool can_tunnel_west(CellCoordinate c) {
+  bool can_tunnel_west(CellCoordinate c) const {
     auto n = cell_west(c);
-    return  n && cell_west(*n) && is_v_passage_cell(*n);
+    return n && cell_west(*n) && !is_under_cell(*n) && is_v_passage_cell(*n);
   }
-  bool can_tunnel_east(CellCoordinate c) {
+  bool can_tunnel_east(CellCoordinate c) const {
     auto n = cell_east(c);
-    return  n && cell_east(*n) && is_v_passage_cell(*n);
+    return n && cell_east(*n) && !is_under_cell(*n) && is_v_passage_cell(*n);
   }
 
   // these depend on the grid reprensation
   virtual bool is_linked(CellCoordinate c1, CellCoordinate c2) const = 0;
   virtual void link(CellCoordinate c1, CellCoordinate c2) = 0;
-
+  virtual bool is_under_cell(CellCoordinate c) const = 0;
 };
 
 struct SparceGridRepr : GridReprCommon {
@@ -357,16 +383,15 @@ struct DenseGridRepr : GridReprCommon {
         uint8_t w : 1;
         uint8_t nw : 1;
       };
-      uint8_t flags;
     };
+    uint8_t flags = 0;
     enum class Flags : uint8_t {
-      UnderCellLR = 1,
-      UnderCellUD = 2,
+      UnderCell = 1,
     };
     void set_flag(Flags f) { flags |= to_underlying(f); }
     bool check_flag(Flags f) const { return 0 != (to_underlying(f) & flags); }
   };
-  static constexpr Cell a_closed_cell{0xff};
+  static constexpr Cell a_closed_cell{0xff, 0x00};
 
   std::vector<Cell> grid_;
   stdex::mdspan<Cell,
@@ -388,8 +413,26 @@ struct DenseGridRepr : GridReprCommon {
 
   // Helper for linking two cells togetherr (must be neighbors)
   void link(CellCoordinate c1, CellCoordinate c2) override {
-    link_(c1, c2);
-    link_(c2, c1);
+    // Weaving:
+    // Check if we are a neighbor-neighbor
+    if (enable_weaving && (std::abs(ssize_t(c1.row - c2.row)) == 2) ||
+        (std::abs(ssize_t(c1.row - c2.row)) == (widths_[c1.row] - 2)) ||
+        (std::abs(ssize_t(c1.col - c2.col)) == 2)
+        // ((widths_[c1.row] + c1.col - c2.col) % widths_[c1.row]) == 2 ||
+        // ((height_ + c1.row - c2.row) % height_) == 2
+    ) {
+      // Weave!
+      CellCoordinate between = {(c1.row + c2.row) / 2, (c1.col + c2.col) / 2};
+      fmt::print("Setting undercell for {}->{}->{}\n", c1, between, c2);
+      auto m = as_mdspan();
+      m(between.row, between.col).set_flag(Cell::Flags::UnderCell);  // FIXME
+      // Link TO the middle, but not back out?
+      link_(c1, between);
+      link_(c2, between);
+    } else {
+      link_(c1, c2);
+      link_(c2, c1);
+    }
   }
   void link_(CellCoordinate c1, CellCoordinate c2) {
     auto neighbors = get_all_neighbors_(c1);
@@ -399,6 +442,11 @@ struct DenseGridRepr : GridReprCommon {
     }
     grid_view_(c1.row, c1.col).walls &=
         ~(1 << ranges::distance(neighbors.begin(), n));
+  }
+
+  bool is_under_cell(CellCoordinate c) const override {
+    auto m = as_mdspan();
+    return m(c.row, c.col).check_flag(Cell::Flags::UnderCell);
   }
 
   auto &operator()(CellCoordinate cell) const {
@@ -472,12 +520,52 @@ struct Grid : DenseGridRepr {
 
   std::vector<CellCoordinate> get_all_neighbors(CellCoordinate c) const {
     auto n = get_all_neighbors_(c);
+    if (enable_weaving) {
+      auto n = get_all_neighbors_(c);
+      auto rv = n | ranges::views::filter([](auto o) { return bool(o); }) |
+                ranges::views::transform([](auto o) { return *o; }) |
+                ranges::to<std::vector>;
+      if (can_tunnel_north(c)) {
+        rv.push_back(*cell_north(*cell_north(c)));
+      }
+      if (can_tunnel_south(c)) {
+        rv.push_back(*cell_south(*cell_south(c)));
+      }
+      if (can_tunnel_east(c)) {
+        rv.push_back(*cell_east(*cell_east(c)));
+      }
+      if (can_tunnel_west(c)) {
+        rv.push_back(*cell_west(*cell_west(c)));
+      }
+      return rv;
+    }
     return n | ranges::views::filter([](auto o) { return bool(o); }) |
            ranges::views::transform([](auto o) { return *o; }) |
            ranges::to<std::vector>;
   }
 
   std::vector<CellCoordinate> get_connected_neighbors(CellCoordinate c) const {
+    if (enable_weaving) {
+      auto n = get_connected_neighbors_(c);
+      auto rv =
+          n | ranges::views::filter([](auto o) { return bool(o); }) |
+          ranges::views::transform([](auto o) { return *o; }) |
+          ranges::views::transform([this, c](auto n) {
+            if (is_crossing_undercell(c, n)) {
+              // neighbor is an under cell AND we are crossing it, so skip
+              // o and return the cell past it -- TODO: Handle wrapping!
+              auto n2 = CellCoordinate{n.row + (n.row - c.row),
+                                       n.col + (n.col - c.col)};
+              fmt::print(
+                  "Crossing an undercell, replacing {} neighbor {} with {}\n",
+                  c, n, n2);
+              return n2;
+            }
+            return n;
+          }) |
+          ranges::to<std::vector>;
+      return rv;
+    }
     auto n = get_connected_neighbors_(c);
     return n | ranges::views::filter([](auto o) { return bool(o); }) |
            ranges::views::transform([](auto o) { return *o; }) |
@@ -502,6 +590,13 @@ struct Grid : DenseGridRepr {
 
   // Helper for getting a random neighbor that is closed (no connections)
   std::optional<CellCoordinate> random_closed_neighbor(CellCoordinate c) {
+    if (enable_weaving) {
+      auto neighbors = get_all_neighbors(c);
+      return jt_range_front(neighbors | ranges::views::filter([this](auto n) {
+                              return is_closed_cell(n);
+                            }) |
+                            ranges::views::sample(1, gen));
+    }
     auto neighbors = get_all_neighbors_(c);
     return jt_range_front(neighbors | ranges::views::filter([this](auto n) {
                             return n && is_closed_cell(*n);

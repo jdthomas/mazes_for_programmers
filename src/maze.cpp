@@ -74,6 +74,7 @@ std::vector<int> dijkstra_distances(const Grid &grid,
     auto neighbors = grid.get_connected_neighbors(cell);
     ranges::transform(neighbors, ranges::back_inserter(q),
                       [d = depth + 1](auto n) {
+                      // FIXME: Need to add an extra cost if crossing an undercell
                         return std::tuple{n, d};
                       });
   }

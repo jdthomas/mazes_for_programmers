@@ -107,7 +107,7 @@ struct DrawableMaze {
   bool show_solution = false;
   bool polar_maze = false;
   std::vector<CellCoordinate> player_path{};
-  bool show_inset = false;
+  bool show_inset = true;
   float braid_maze_ratio = 0.0f;
   bool show_as_hex = false;
 };
@@ -449,53 +449,86 @@ auto square_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
     fill_poly.emplace_back(x4, y1);
     fill_poly.emplace_back(x1, y1);
   } else {
-    if (!dmaze.grid.connected_cell_north(cell)) {
-      segments.emplace_back(x2, y2, x3, y2);
-    } else {
-      segments.emplace_back(x2, y1, x2, y2);
-      segments.emplace_back(x3, y1, x3, y2);
+    if (dmaze.grid(cell).check_flag(DenseGridRepr::Cell::Flags::UnderCell)) {
+      if (dmaze.grid.is_v_passage_cell(cell)) {
+        segments.emplace_back(x2, y1, x2, y2);
+        segments.emplace_back(x3, y1, x3, y2);
+        segments.emplace_back(x2, y3, x2, y4);
+        segments.emplace_back(x3, y3, x3, y4);
+      } else {
+        // assert(dmaze.grid.is_h_passage_cell(cell));
+        segments.emplace_back(x1, y2, x2, y2);
+        segments.emplace_back(x1, y3, x2, y3);
+        segments.emplace_back(x3, y2, x4, y2);
+        segments.emplace_back(x3, y3, x4, y3);
+      }
     }
 
-    if (!dmaze.grid.connected_cell_east(cell)) {
-      segments.emplace_back(x3, y2, x3, y3);
-    } else {
-      segments.emplace_back(x3, y2, x4, y2);
-      segments.emplace_back(x3, y3, x4, y3);
-    }
+    {
+      if (!dmaze.grid.is_connected_directly_north(cell)) {
+        segments.emplace_back(x2, y2, x3, y2);
+      } else {
+        segments.emplace_back(x2, y1, x2, y2);
+        segments.emplace_back(x3, y1, x3, y2);
+      }
 
-    if (!dmaze.grid.connected_cell_south(cell)) {
-      segments.emplace_back(x2, y3, x3, y3);
-    } else {
-      segments.emplace_back(x2, y3, x2, y4);
-      segments.emplace_back(x3, y3, x3, y4);
-    }
+      if (!dmaze.grid.is_connected_directly_east(cell)) {
+        segments.emplace_back(x3, y2, x3, y3);
+      } else {
+        segments.emplace_back(x3, y2, x4, y2);
+        segments.emplace_back(x3, y3, x4, y3);
+      }
 
-    if (!dmaze.grid.connected_cell_west(cell)) {
-      segments.emplace_back(x2, y2, x2, y3);
-    } else {
-      segments.emplace_back(x1, y2, x2, y2);
-      segments.emplace_back(x1, y3, x2, y3);
-    }
-    //
-    fill_poly.emplace_back(x2, y2);
-    if (dmaze.grid.connected_cell_north(cell)) {
+      if (!dmaze.grid.is_connected_directly_south(cell)) {
+        segments.emplace_back(x2, y3, x3, y3);
+      } else {
+        segments.emplace_back(x2, y3, x2, y4);
+        segments.emplace_back(x3, y3, x3, y4);
+      }
+
+      if (!dmaze.grid.is_connected_directly_west(cell)) {
+        segments.emplace_back(x2, y2, x2, y3);
+      } else {
+        segments.emplace_back(x1, y2, x2, y2);
+        segments.emplace_back(x1, y3, x2, y3);
+      }
+
+    if (dmaze.grid(cell).check_flag(DenseGridRepr::Cell::Flags::UnderCell)) {
+      fill_poly.emplace_back(x2, y2);
       fill_poly.emplace_back(x2, y1);
       fill_poly.emplace_back(x3, y1);
-    }
-    fill_poly.emplace_back(x3, y2);
-    if (dmaze.grid.connected_cell_east(cell)) {
+      fill_poly.emplace_back(x3, y2);
       fill_poly.emplace_back(x4, y2);
       fill_poly.emplace_back(x4, y3);
-    }
-    fill_poly.emplace_back(x3, y3);
-    if (dmaze.grid.connected_cell_south(cell)) {
+      fill_poly.emplace_back(x3, y3);
       fill_poly.emplace_back(x3, y4);
       fill_poly.emplace_back(x2, y4);
-    }
-    fill_poly.emplace_back(x2, y3);
-    if (dmaze.grid.connected_cell_west(cell)) {
+      fill_poly.emplace_back(x2, y3);
       fill_poly.emplace_back(x1, y3);
       fill_poly.emplace_back(x1, y2);
+    } else {
+      //
+      fill_poly.emplace_back(x2, y2);
+      if (dmaze.grid.is_connected_directly_north(cell)) {
+        fill_poly.emplace_back(x2, y1);
+        fill_poly.emplace_back(x3, y1);
+      }
+      fill_poly.emplace_back(x3, y2);
+      if (dmaze.grid.is_connected_directly_east(cell)) {
+        fill_poly.emplace_back(x4, y2);
+        fill_poly.emplace_back(x4, y3);
+      }
+      fill_poly.emplace_back(x3, y3);
+      if (dmaze.grid.is_connected_directly_south(cell)) {
+        fill_poly.emplace_back(x3, y4);
+        fill_poly.emplace_back(x2, y4);
+      }
+      fill_poly.emplace_back(x2, y3);
+      if (dmaze.grid.is_connected_directly_west(cell)) {
+        fill_poly.emplace_back(x1, y3);
+        fill_poly.emplace_back(x1, y2);
+      }
+    }
     }
   }
   return std::make_pair(fill_poly, segments);
@@ -523,7 +556,12 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
     for (const auto &cell : dmaze.grid.positions()) {
       auto corners = cell_polygon(cell);
       sf::ConvexShape polygon;
-      polygon.setFillColor(sf::Color(47, 79, 79));  // dark gray
+      if (dmaze.grid(cell).check_flag(DenseGridRepr::Cell::Flags::UnderCell)) {
+        // polygon.setFillColor(sf::Color(sf::Color::Red));  // dark gray
+        polygon.setFillColor(sf::Color(37, 69, 69));  // dark gray
+      } else {
+        polygon.setFillColor(sf::Color(47, 79, 79));  // dark gray
+      }
 
       polygon.setPointCount(corners.fill_poly.size());
       for (const auto &[pt_ct, pt] :
@@ -754,7 +792,7 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
 }
 
 void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
-  bool wrap_ew = true;
+  bool wrap_ew = false;
   std::unique_ptr<DrawableMaze> dmaze;
   auto regen_maze = [&dmaze, &method_idx, &width, &height, &mask, &wrap_ew]() {
     const auto &method = GeneratorRegistry::GetMazeGeneratorByIndex(method_idx);
