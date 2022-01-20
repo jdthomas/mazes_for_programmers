@@ -17,6 +17,7 @@ namespace pstl = std;
 #include <pstl/algorithm>
 #include <pstl/execution>
 #endif
+#include <queue>
 #include <random>
 #include <range/v3/all.hpp>
 #include <set>
@@ -354,6 +355,23 @@ void kruskel_maze(Grid &grid) {
   // fmt::print("state: \n\t{} \n\n\t{}\n", set_for_cell, cells_in_set);
 }
 GeneratorRegistry::RegisterGenerator kr('U', "Kruskel", kruskel_maze);
+
+void prims_maze(Grid &grid) {
+  std::uniform_real_distribution<float> d(0.0f, 1.0f);
+  std::priority_queue<std::pair<float, CellCoordinate>> active;
+  active.emplace(d(grid.gen), grid.random_cell());
+  while (!active.empty()) {
+    auto [r, cell] = active.top();
+    auto n = grid.random_closed_neighbor(cell);
+    if (n) {
+      active.emplace(d(grid.gen), *n);
+      grid.link(cell, *n);
+    } else {
+      active.pop();
+    }
+  }
+}
+GeneratorRegistry::RegisterGenerator pr('P', "Prims", prims_maze);
 
 void all_walls_maze(Grid &grid) {
   // default is all walls
