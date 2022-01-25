@@ -101,7 +101,7 @@ void sidewinder_maze(Grid &grid) {
   std::bernoulli_distribution d(0.5);
 
   auto r = ranges::views::iota(static_cast<size_t>(0),
-                               static_cast<size_t>(grid.height_));
+                               static_cast<size_t>(grid.height_ - 1));
   std::for_each(r.begin(), r.end(), [&grid, &d](const auto &row) {
     size_t run_start = 0;
     for (size_t col = 0; col < grid.widths_.back(); col++) {
@@ -119,6 +119,11 @@ void sidewinder_maze(Grid &grid) {
       }
     }
   });
+  // FIXME: Fix last rows
+  for (size_t col = 0; col < grid.widths_.back() - 1; col++) {
+    const size_t row = grid.height_ - 1;
+    grid.link({row, col}, {row, col + 1});
+  }
 }
 GeneratorRegistry::RegisterGenerator s('S', "Sidewinder", sidewinder_maze);
 
@@ -126,7 +131,7 @@ void sidewinder_maze_p(Grid &grid) {
   std::bernoulli_distribution d(0.5);
 
   auto r = ranges::views::iota(static_cast<size_t>(0),
-                               static_cast<size_t>(grid.height_));
+                               static_cast<size_t>(grid.height_ - 1));
   std::for_each(pstl::execution::par_unseq, r.begin(), r.end(),
                 [&grid, &d](const auto &row) {
                   size_t run_start = 0;
@@ -144,6 +149,11 @@ void sidewinder_maze_p(Grid &grid) {
                     }
                   }
                 });
+  // FIXME: Fix last rows
+  for (size_t col = 0; col < grid.widths_.back() - 1; col++) {
+    const size_t row = grid.height_ - 1;
+    grid.link({row, col}, {row, col + 1});
+  }
 }
 GeneratorRegistry::RegisterGenerator s2('s', "Sidewinder(Parallel - 1)",
                                         sidewinder_maze_p);
