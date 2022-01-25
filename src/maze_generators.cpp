@@ -256,6 +256,10 @@ void recursive_backtracking_maze(Grid &grid) {
 GeneratorRegistry::RegisterGenerator r('R', "RecursiveBacktracking",
                                        recursive_backtracking_maze);
 
+//////////////////////////////////////////////////////////////////////////////
+// Set Based
+//////////////////////////////////////////////////////////////////////////////
+
 void kruskel_maze(Grid &grid) {
   // n a nutshell, then, the algorithm is:
   //      1. Assign each cell to its own set.
@@ -372,6 +376,146 @@ void prims_maze(Grid &grid) {
   }
 }
 GeneratorRegistry::RegisterGenerator pr('P', "Prims", prims_maze);
+
+template <typename T>
+void growing_maze(Grid &grid, T active_selector) {
+  std::vector<CellCoordinate> active;
+  active.emplace_back(grid.random_cell());
+  while (!active.empty()) {
+    auto cell = active_selector(active);
+    auto n = grid.random_closed_neighbor(cell);
+    if (n) {
+      grid.link(cell, *n);
+      active.emplace_back(*n);
+    } else {
+      active.erase(std::remove_if(active.begin(), active.end(),
+                                  [&cell](const auto &a) { return a == cell; }),
+                   active.end());
+    }
+  }
+}
+
+void grow_sample_maze(Grid &grid) {
+  return growing_maze(grid, [&](const auto &active) {
+    // random element
+    std::uniform_int_distribution<> dis(
+        0, std::distance(active.begin(), active.end()) - 1);
+    return active[dis(grid.gen)];
+  });
+}
+GeneratorRegistry::RegisterGenerator gs('1', "GrowSample", grow_sample_maze);
+
+void grow_last_maze(Grid &grid) {
+  return growing_maze(grid, [&](const auto &active) {
+    // last element
+    return active.back();
+  });
+}
+GeneratorRegistry::RegisterGenerator gl('2', "GrowLast", grow_last_maze);
+
+void grow_last_or_sample_maze(Grid &grid) {
+  return growing_maze(grid, [&](const auto &active) {
+    // random element
+    std::uniform_int_distribution<> dis(
+        0, std::distance(active.begin(), active.end()) - 1);
+    std::bernoulli_distribution d(0.5);
+    return d(grid.gen) ? active[dis(grid.gen)] : active.back();
+  });
+}
+GeneratorRegistry::RegisterGenerator glos('3', "GrowLastOrSample",
+                                          grow_last_or_sample_maze);
+
+void ellers_maze(Grid &grid) {
+  std::unordered_map<size_t, int> set_for_col{};
+  std::unordered_map<int, std::set<CellCoordinate>> cells_in_set{};
+  std::bernoulli_distribution d(0.5);
+  int next_set = 0;
+
+  auto merge = [&](auto winner, auto loser) {
+    // grid.link(left, right);
+    // auto winner = set_for_col[left.col];
+    // auto loser = set_for_col[right.col];
+    auto &losers = cells_in_set[loser];
+
+    // fmt::print("Linking: {} ({}) to {} ({}) -- {}\n", left, winner, right,
+    // loser, losers);
+
+    // Add the loser set items to the winner set
+    cells_in_set[winner].merge(losers);
+    // And update all of those to same set
+    for (const auto &cell : cells_in_set[winner]) {
+      // fmt::print("moving {} to {} (was {})\n", cell, winner,
+      // set_for_col[cell]);
+      set_for_col[cell.col] = winner;
+    }
+    // And blow away loser set
+    cells_in_set.erase(loser);
+  };
+
+  auto record = [&](auto set, auto cell) {
+    set_for_col[cell.col] = set;
+    cells_in_set[set].insert(cell);
+  };
+
+  auto set_for = [&](auto cell) {
+    if (0 == set_for_col.count(cell.col)) {
+      record(next_set, cell);
+      ++next_set;
+    }
+    return set_for_col[cell.col];
+  };
+
+  auto r = ranges::views::iota(static_cast<size_t>(0),
+                               static_cast<size_t>(grid.height_));
+  std::for_each(r.begin(), r.end(), [&](const auto &row) {
+    for (size_t col = 0; col < grid.widths_.back(); col++) {
+      CellCoordinate cell{row, col};
+      auto w = grid.cell_west(cell);
+      if (!w) continue;
+      auto set = set_for(cell);
+      auto prior_set = set_for(*w);
+      bool should_link =
+          set != prior_set && (!grid.cell_south(cell) || d(grid.gen));
+      if (should_link) {
+        grid.link(cell, *w);
+        merge(prior_set, set);
+      }
+    }
+
+    if (grid.cell_south(CellCoordinate{row, 0})) {
+      decltype(set_for_col) prev_set_for_col;
+      decltype(cells_in_set) prev_cells_in_set;
+      std::swap(prev_set_for_col, set_for_col);
+      std::swap(prev_cells_in_set, cells_in_set);
+      // auto prev_set_for_col = set_for_col;
+      // auto prev_cells_in_set = cells_in_set;
+      // set_for_col.clear();
+      // cells_in_set.clear();
+      for (auto &[set, cells] : prev_cells_in_set) {
+        std::bernoulli_distribution d3(0.33);
+        int link_ct = 0;
+        for (auto cell : cells) {
+          if (d3(grid.gen)) {
+            link_ct++;
+            grid.link(cell, *grid.cell_south(cell));
+            record(prev_set_for_col[cell.col], *grid.cell_south(cell));
+          }
+        }
+        if (link_ct == 0) {
+          // FIXME: Pick a random cell?
+          auto cell = *cells.begin();
+          grid.link(cell, *grid.cell_south(cell));
+          record(prev_set_for_col[cell.col], *grid.cell_south(cell));
+        }
+      }
+    }
+  });
+}
+GeneratorRegistry::RegisterGenerator el('4', "Ellers", ellers_maze);
+
+void recursive_division_maze(Grid &grid) {}
+GeneratorRegistry::RegisterGenerator rd('5', "RecursiveDivision",
+                                        recursive_division_maze);
 
 void all_walls_maze(Grid &grid) {
   // default is all walls
