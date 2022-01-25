@@ -74,7 +74,8 @@ std::vector<int> dijkstra_distances(const Grid &grid,
     auto neighbors = grid.get_connected_neighbors(cell);
     ranges::transform(neighbors, ranges::back_inserter(q),
                       [d = depth + 1](auto n) {
-                      // FIXME: Need to add an extra cost if crossing an undercell
+                        // FIXME: Need to add an extra cost if crossing an
+                        // undercell
                         return std::tuple{n, d};
                       });
   }
@@ -155,8 +156,7 @@ Grid::Grid(size_t width, size_t height)
       rd{},
       gen{rd()},
       mask(width * height),
-      mask_as_mdspan_{mask.data(), height_, widths_.back()} {
-};
+      mask_as_mdspan_{mask.data(), height_, widths_.back()} {};
 
 std::vector<GeneratorRegistry::RegistryConfig> GeneratorRegistry::registry_{};
 

@@ -43,15 +43,13 @@ struct CellCoordinate {
 
 bool operator<(const CellCoordinate &a, const CellCoordinate &b);
 bool operator==(const CellCoordinate &a, const CellCoordinate &b);
-struct cell_coordinate_hash_fn
-{
-    std::size_t operator() (const CellCoordinate &cell) const
-    {
-        std::size_t h1 = std::hash<size_t>()(cell.row);
-        std::size_t h2 = std::hash<size_t>()(cell.col);
+struct cell_coordinate_hash_fn {
+  std::size_t operator()(const CellCoordinate &cell) const {
+    std::size_t h1 = std::hash<size_t>()(cell.row);
+    std::size_t h2 = std::hash<size_t>()(cell.col);
 
-        return h1 ^ h2;
-    }
+    return h1 ^ h2;
+  }
 };
 
 struct GridMask {
@@ -225,39 +223,43 @@ struct GridReprCommon {
 
   bool is_connected_directly_north(CellCoordinate c) const {
     auto n = cell_north(c);
-    return n && is_linked(c, *n) ;
+    return n && is_linked(c, *n);
   }
   bool is_connected_directly_west(CellCoordinate c) const {
     auto n = cell_west(c);
-    return n && is_linked(c, *n) ;
+    return n && is_linked(c, *n);
   }
   bool is_connected_directly_south(CellCoordinate c) const {
     auto n = cell_south(c);
-    return n && is_linked(c, *n) ;
+    return n && is_linked(c, *n);
   }
   bool is_connected_directly_east(CellCoordinate c) const {
     auto n = cell_east(c);
-    return n && is_linked(c, *n) ;
+    return n && is_linked(c, *n);
   }
   //
   auto connected_cell_north(CellCoordinate c) const {
     auto n = cell_north(c);
-    if (enable_weaving && n && is_crossing_undercell(c, *n)) return cell_north(*n);
+    if (enable_weaving && n && is_crossing_undercell(c, *n))
+      return cell_north(*n);
     return n && is_linked(c, *n) ? n : std::nullopt;
   }
   auto connected_cell_east(CellCoordinate c) const {
     auto n = cell_east(c);
-    if (enable_weaving && n && is_crossing_undercell(c, *n)) return cell_east(*n);
+    if (enable_weaving && n && is_crossing_undercell(c, *n))
+      return cell_east(*n);
     return n && is_linked(c, *n) ? n : std::nullopt;
   }
   auto connected_cell_south(CellCoordinate c) const {
     auto n = cell_south(c);
-    if (enable_weaving && n && is_crossing_undercell(c, *n)) return cell_south(*n);
+    if (enable_weaving && n && is_crossing_undercell(c, *n))
+      return cell_south(*n);
     return n && is_linked(c, *n) ? n : std::nullopt;
   }
   auto connected_cell_west(CellCoordinate c) const {
     auto n = cell_west(c);
-    if (enable_weaving && n && is_crossing_undercell(c, *n)) return cell_west(*n);
+    if (enable_weaving && n && is_crossing_undercell(c, *n))
+      return cell_west(*n);
     return n && is_linked(c, *n) ? n : std::nullopt;
   }
 
@@ -433,7 +435,7 @@ struct DenseGridRepr : GridReprCommon {
     ) {
       // Weave!
       CellCoordinate between = {(c1.row + c2.row) / 2, (c1.col + c2.col) / 2};
-      fmt::print("Setting undercell for {}->{}->{}\n", c1, between, c2);
+      // fmt::print("Setting undercell for {}->{}->{}\n", c1, between, c2);
       auto m = as_mdspan();
       m(between.row, between.col).set_flag(Cell::Flags::UnderCell);  // FIXME
       // Link TO the middle, but not back out?

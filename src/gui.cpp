@@ -493,42 +493,42 @@ auto square_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
         segments.emplace_back(x1, y3, x2, y3);
       }
 
-    if (dmaze.grid(cell).check_flag(DenseGridRepr::Cell::Flags::UnderCell)) {
-      fill_poly.emplace_back(x2, y2);
-      fill_poly.emplace_back(x2, y1);
-      fill_poly.emplace_back(x3, y1);
-      fill_poly.emplace_back(x3, y2);
-      fill_poly.emplace_back(x4, y2);
-      fill_poly.emplace_back(x4, y3);
-      fill_poly.emplace_back(x3, y3);
-      fill_poly.emplace_back(x3, y4);
-      fill_poly.emplace_back(x2, y4);
-      fill_poly.emplace_back(x2, y3);
-      fill_poly.emplace_back(x1, y3);
-      fill_poly.emplace_back(x1, y2);
-    } else {
-      //
-      fill_poly.emplace_back(x2, y2);
-      if (dmaze.grid.is_connected_directly_north(cell)) {
+      if (dmaze.grid(cell).check_flag(DenseGridRepr::Cell::Flags::UnderCell)) {
+        fill_poly.emplace_back(x2, y2);
         fill_poly.emplace_back(x2, y1);
         fill_poly.emplace_back(x3, y1);
-      }
-      fill_poly.emplace_back(x3, y2);
-      if (dmaze.grid.is_connected_directly_east(cell)) {
+        fill_poly.emplace_back(x3, y2);
         fill_poly.emplace_back(x4, y2);
         fill_poly.emplace_back(x4, y3);
-      }
-      fill_poly.emplace_back(x3, y3);
-      if (dmaze.grid.is_connected_directly_south(cell)) {
+        fill_poly.emplace_back(x3, y3);
         fill_poly.emplace_back(x3, y4);
         fill_poly.emplace_back(x2, y4);
-      }
-      fill_poly.emplace_back(x2, y3);
-      if (dmaze.grid.is_connected_directly_west(cell)) {
+        fill_poly.emplace_back(x2, y3);
         fill_poly.emplace_back(x1, y3);
         fill_poly.emplace_back(x1, y2);
+      } else {
+        //
+        fill_poly.emplace_back(x2, y2);
+        if (dmaze.grid.is_connected_directly_north(cell)) {
+          fill_poly.emplace_back(x2, y1);
+          fill_poly.emplace_back(x3, y1);
+        }
+        fill_poly.emplace_back(x3, y2);
+        if (dmaze.grid.is_connected_directly_east(cell)) {
+          fill_poly.emplace_back(x4, y2);
+          fill_poly.emplace_back(x4, y3);
+        }
+        fill_poly.emplace_back(x3, y3);
+        if (dmaze.grid.is_connected_directly_south(cell)) {
+          fill_poly.emplace_back(x3, y4);
+          fill_poly.emplace_back(x2, y4);
+        }
+        fill_poly.emplace_back(x2, y3);
+        if (dmaze.grid.is_connected_directly_west(cell)) {
+          fill_poly.emplace_back(x1, y3);
+          fill_poly.emplace_back(x1, y2);
+        }
       }
-    }
     }
   }
   return std::make_pair(fill_poly, segments);
