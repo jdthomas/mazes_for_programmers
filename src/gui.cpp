@@ -56,7 +56,7 @@ struct DrawableMaze {
     method.generate(grid);
     auto t2 = high_resolution_clock::now();
 
-    braid_maze(grid, braid_maze_ratio);
+    braid_maze(grid, gen_settings.braid_maze_ratio);
 
     if (use_polar_widths) {
       grid.widths_ = calculate_variable_widths(grid.height_);
@@ -104,12 +104,26 @@ struct DrawableMaze {
   std::string method_name;
   size_t max_path_len;
   std::function<sf::Color(const Grid &, int, int)> colorizer;  // FIXME
-  bool show_solution = false;
-  bool polar_maze = false;
   std::vector<CellCoordinate> player_path{};
-  bool show_inset = true;
-  float braid_maze_ratio = 0.0f;
-  bool show_as_hex = false;
+
+  struct GenerationSettings {
+    float braid_maze_ratio = 0.0f;
+    // bool allow_ew_wrap = false;
+    // bool enable_weaving = true;
+    // Gridsettings:
+    //  size_t height;
+    //  std::vector<size_t> widths_;
+    //  mask ?
+  };
+  struct ViewSettings {
+    bool show_solution = false;
+    bool polar_maze = false;
+    bool show_inset = true;
+    bool show_as_hex = false;
+  };
+
+  GenerationSettings gen_settings;
+  ViewSettings view_settings;
 };
 
 auto draw_path = [](const Grid &grid, sf::RenderWindow &window,
@@ -226,7 +240,7 @@ auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
   std::vector<CellSegment> segments;
   std::vector<CellCorner> fill_poly;
 
-  if (!dmaze.show_inset) {
+  if (!dmaze.view_settings.show_inset) {
     // Fixme: These are not correct since currently I do not have real hex
     // mazes. To demo this code, just open whole eastt/west based on a square
     // maze.
@@ -430,7 +444,7 @@ auto square_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
   const float x4 = col + 1;
   std::vector<CellSegment> segments;
   std::vector<CellCorner> fill_poly;
-  if (!dmaze.show_inset) {
+  if (!dmaze.view_settings.show_inset) {
     if (!dmaze.grid.connected_cell_north(cell)) {
       segments.emplace_back(x1, y1, x4, y1);
     }
@@ -538,7 +552,7 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
                            auto cell_polygon, auto center_of_cell,
                            auto cell_width, auto cell_height) -> void {
   const auto line_color = sf::Color::Green;
-  if (dmaze.show_solution) {
+  if (dmaze.view_settings.show_solution) {
     for (const auto &cell : dmaze.grid.positions()) {
       auto corners = cell_polygon(cell);
       sf::ConvexShape polygon;
@@ -600,7 +614,7 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
                          sf::Color::Magenta);
   }
 
-  if (dmaze.show_solution) {
+  if (dmaze.view_settings.show_solution) {
     draw_path(dmaze.grid, window, dmaze.path, center_of_cell);
   }
   draw_path(dmaze.grid, window, dmaze.player_path, center_of_cell,
@@ -660,7 +674,7 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     return center_y + (radius * std::sin(theta_ccw));
   };
   const auto center_of_cell = [&](const auto cell) {
-    if (dmaze.show_as_hex) {
+    if (dmaze.view_settings.show_as_hex) {
       const auto [cx, cy] = hex_center_of_cell(cell);
       return CellCorner(cell_to_draw_x(cx, cy), cell_to_draw_y(cx, cy));
     } else {
@@ -674,7 +688,7 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     const auto theta_ccw = cell.col * theta(cell.row);
     const auto theta_cw = (cell.col + 1) * theta(cell.row);
 
-    if (dmaze.show_as_hex) {
+    if (dmaze.view_settings.show_as_hex) {
       auto [fill_poly, segs] = hex_cell_to_segment_coords(cell, dmaze);
       return {
           .i = center_of_cell(cell),
@@ -739,7 +753,7 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     return cell_width * (col + 1);
   };
   const auto center_of_cell = [&](const auto cell) {
-    if (dmaze.show_as_hex) {
+    if (dmaze.view_settings.show_as_hex) {
       const auto [cx, cy] = hex_center_of_cell(cell);
       return CellCorner(cell_to_draw_y(cx), cell_to_draw_x(cy));
     } else {
@@ -750,7 +764,7 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   auto cell_polygon = [&](auto cell) -> CellPoly {
     const auto &[row, col] = cell;
 
-    if (dmaze.show_as_hex) {
+    if (dmaze.view_settings.show_as_hex) {
       auto [fill_poly, segs] = hex_cell_to_segment_coords(cell, dmaze);
       return {
           .i = center_of_cell(cell),
@@ -862,10 +876,12 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
               need_regen = true;
               break;
             case 'i':
-              dmaze->show_inset = !dmaze->show_inset;
+              dmaze->view_settings.show_inset =
+                  !dmaze->view_settings.show_inset;
               break;
             case 'r':
-              dmaze->polar_maze = !dmaze->polar_maze;
+              dmaze->view_settings.polar_maze =
+                  !dmaze->view_settings.polar_maze;
               break;
             case 'w':
               wrap_ew = !wrap_ew;
@@ -875,10 +891,12 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
               fmt::print("{}\n", dmaze->grid);
               break;
             case 's':
-              dmaze->show_solution = !dmaze->show_solution;
+              dmaze->view_settings.show_solution =
+                  !dmaze->view_settings.show_solution;
               break;
             case 'x':
-              dmaze->show_as_hex = !dmaze->show_as_hex;
+              dmaze->view_settings.show_as_hex =
+                  !dmaze->view_settings.show_as_hex;
               break;
             case 'z':
               rot45 = !rot45;
@@ -930,7 +948,7 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
     window.clear(sf::Color::Black);
 
     // draw everything here...
-    if (dmaze->polar_maze) {
+    if (dmaze->view_settings.polar_maze) {
       draw_polar_maze(window, *dmaze);
     } else {
       draw_maze(window, *dmaze);
