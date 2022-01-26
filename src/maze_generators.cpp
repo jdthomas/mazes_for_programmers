@@ -387,6 +387,7 @@ void prims_maze(Grid &grid) {
 }
 GeneratorRegistry::RegisterGenerator pr('P', "Prims", prims_maze);
 
+namespace {
 template <typename T>
 void growing_maze(Grid &grid, T active_selector) {
   std::vector<CellCoordinate> active;
@@ -404,6 +405,7 @@ void growing_maze(Grid &grid, T active_selector) {
     }
   }
 }
+};  // namespace
 
 void grow_sample_maze(Grid &grid) {
   return growing_maze(grid, [&](const auto &active) {
