@@ -47,7 +47,7 @@ if (SFML_FOUND)
   find_package(ImGui-SFML CONFIG REQUIRED)
   find_package(imgui CONFIG REQUIRED)
   add_executable(mazes_gui MACOSX_BUNDLE res/MazeIcon.icns src/gui.cpp)
-  target_link_libraries(mazes_gui mazes fmt::fmt png_static std::mdspan sfml-graphics TBB::tbb cxxopts::cxxopts imgui::imgui ImGui-SFML::ImGui-SFML ${CMAKE_THREAD_LIBS_INIT})
+  target_link_libraries(mazes_gui mazes fmt::fmt png_static std::mdspan sfml-graphics TBB::tbb cxxopts::cxxopts imgui::imgui ImGui-SFML::ImGui-SFML ${CMAKE_THREAD_LIBS_INIT} "-framework GameController")
   target_include_directories(mazes_gui PRIVATE ${PNGPP_INCLUDE_DIRS})
   target_compile_features(mazes_gui PUBLIC cxx_std_17)
   set_target_properties(mazes_gui PROPERTIES
