@@ -362,6 +362,7 @@ struct GridReprCommon {
   // these depend on the grid reprensation
   virtual bool is_linked(CellCoordinate c1, CellCoordinate c2) const = 0;
   virtual void link(CellCoordinate c1, CellCoordinate c2) = 0;
+  virtual void unlink(CellCoordinate c1, CellCoordinate c2) = 0;
   virtual bool is_under_cell(CellCoordinate c) const = 0;
 };
 
@@ -424,6 +425,10 @@ struct DenseGridRepr : GridReprCommon {
             (1 << ranges::distance(neighbors.begin(), n))) == 0;
   }
 
+  void unlink(CellCoordinate c1, CellCoordinate c2) override {
+    link_(c1, c2, false);
+    link_(c2, c1, false);
+  }
   // Helper for linking two cells togetherr (must be neighbors)
   void link(CellCoordinate c1, CellCoordinate c2) override {
     // Weaving:
@@ -440,21 +445,26 @@ struct DenseGridRepr : GridReprCommon {
       auto m = as_mdspan();
       m(between.row, between.col).set_flag(Cell::Flags::UnderCell);  // FIXME
       // Link TO the middle, but not back out?
-      link_(c1, between);
-      link_(c2, between);
+      link_(c1, between, true);
+      link_(c2, between, true);
     } else {
-      link_(c1, c2);
-      link_(c2, c1);
+      link_(c1, c2, true);
+      link_(c2, c1, true);
     }
   }
-  void link_(CellCoordinate c1, CellCoordinate c2) {
+  void link_(CellCoordinate c1, CellCoordinate c2, bool link_or_unlink) {
     auto neighbors = get_all_neighbors_(c1);
     auto n = ranges::find_if(neighbors, [c2](auto n) { return n && *n == c2; });
     if (n == neighbors.end()) {
       throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1, c2));
     }
-    grid_view_(c1.row, c1.col).walls &=
-        ~(1 << ranges::distance(neighbors.begin(), n));
+    if (link_or_unlink) {
+      grid_view_(c1.row, c1.col).walls &=
+          ~(1 << ranges::distance(neighbors.begin(), n));
+    } else {
+      grid_view_(c1.row, c1.col).walls |=
+          (1 << ranges::distance(neighbors.begin(), n));
+    }
   }
 
   bool is_under_cell(CellCoordinate c) const override {

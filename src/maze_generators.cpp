@@ -523,15 +523,72 @@ void ellers_maze(Grid &grid) {
 }
 GeneratorRegistry::RegisterGenerator el('4', "Ellers", ellers_maze);
 
+namespace {
+void recursive_division_maze_divide_h(Grid &grid, size_t row, size_t col,
+                                      size_t height, size_t width);
+void recursive_division_maze_divide_v(Grid &grid, size_t row, size_t col,
+                                      size_t height, size_t width);
+
+void recursive_division_maze_divide(Grid &grid, size_t row, size_t col,
+                                    size_t height, size_t width) {
+  if (height <= 1 || width <= 1) {
+    return;
+  }
+  if (height > width)
+    recursive_division_maze_divide_h(grid, row, col, height, width);
+  else
+    recursive_division_maze_divide_v(grid, row, col, height, width);
+}
+void recursive_division_maze_divide_h(Grid &grid, size_t row, size_t col,
+                                      size_t height, size_t width) {
+  std::uniform_int_distribution<> dis_h(0, height - 1);
+  std::uniform_int_distribution<> dis_w(0, width);
+  auto divide_south_of = dis_h(grid.gen);
+  auto passage_at = dis_w(grid.gen);
+  for (int x = 0; x < width - 1; ++x) {
+    if (x == passage_at) {
+      continue;
+    }
+    CellCoordinate cell{row + divide_south_of, col + x};
+    auto s = grid.cell_south(cell);
+    if (s) {
+      grid.unlink(cell, *s);
+    }
+  }
+  recursive_division_maze_divide(grid, row, col, divide_south_of + 1, width);
+  recursive_division_maze_divide(grid, row + divide_south_of + 1, col,
+                                 height - divide_south_of - 1, width);
+}
+void recursive_division_maze_divide_v(Grid &grid, size_t row, size_t col,
+                                      size_t height, size_t width) {
+  std::uniform_int_distribution<> dis_h(0, height);
+  std::uniform_int_distribution<> dis_w(0, width - 1);
+  auto divide_east_of = dis_w(grid.gen);
+  auto passage_at = dis_h(grid.gen);
+  for (int x = 0; x < height - 1; ++x) {
+    if (x == passage_at) {
+      continue;
+    }
+    CellCoordinate cell{row + x, col + divide_east_of};
+    auto e = grid.cell_east(cell);
+    if (e) {
+      grid.unlink(cell, *e);
+    }
+  }
+  recursive_division_maze_divide(grid, row, col, height, divide_east_of + 1);
+  recursive_division_maze_divide(grid, row, col + divide_east_of + 1, height,
+                                 width - divide_east_of - 1);
+}
+};  // namespace
+
 void recursive_division_maze(Grid &grid) {
   grid.reset_open();
+  recursive_division_maze_divide(grid, 0, 0, grid.height_, grid.widths_.back());
 }
 GeneratorRegistry::RegisterGenerator rd('5', "RecursiveDivision",
                                         recursive_division_maze);
 
-void no_walls_maze(Grid &grid) {
-  grid.reset_open();
-}
+void no_walls_maze(Grid &grid) { grid.reset_open(); }
 GeneratorRegistry::RegisterGenerator o('N', "NoWalls", no_walls_maze);
 void all_walls_maze(Grid &grid) {
   // default is all walls
