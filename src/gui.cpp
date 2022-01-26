@@ -19,7 +19,14 @@ namespace pstl = std;
 #include <pstl/algorithm>
 #include <pstl/execution>
 #endif
+
+#include <imgui-SFML.h>
+#include <imgui.h>
+
 #include <SFML/Graphics.hpp>
+#include <SFML/Graphics/RenderWindow.hpp>
+#include <SFML/System/Clock.hpp>
+#include <SFML/Window/Event.hpp>
 #include <random>
 #include <range/v3/all.hpp>
 #include <set>
@@ -818,6 +825,9 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
 
   // create the window
   sf::RenderWindow window(sf::VideoMode(800, 600), "Maze window");
+  window.setVerticalSyncEnabled(true);
+  ImGui::SFML::Init(window);
+
   auto player_move = [&](auto next) {
     if (next) {
       if (dmaze->player_path.size() > 1 &&
@@ -829,6 +839,8 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
     }
   };
   bool rot45 = false;
+  bool show_gui = false;
+  sf::Clock deltaClock;
 
   // run the program as long as the window is open
   while (window.isOpen()) {
@@ -837,6 +849,7 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
     sf::Event event;
     bool need_regen = false;
     while (window.pollEvent(event)) {
+      ImGui::SFML::ProcessEvent(event);
       // "close requested" event: we close the window
       switch (event.type) {
         case sf::Event::Closed:
@@ -862,6 +875,9 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
               need_regen = true;
               break;
 
+            case '?':
+              show_gui = !show_gui;
+              break;
             case 'j':
             case 'J':
               method_idx =
@@ -942,6 +958,23 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
           break;
       }
     }
+
+    // Settings GUI
+    if (show_gui) {
+      ImGui::SFML::Update(window, deltaClock.restart());
+
+      ImGui::Begin("Settings");  // begin window
+
+      if (ImGui::Button("Generate New Maze")) {
+        fmt::print("");
+        // this code gets if user clicks on the button
+        // yes, you could have written if(ImGui::InputText(...))
+        // but I do this to show how buttons work :)
+        need_regen = true;
+      }
+      ImGui::End();  // end window
+    }
+
     if (need_regen) regen_maze();
 
     // clear the window with black color
@@ -954,6 +987,9 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
       draw_maze(window, *dmaze);
     }
 
+    if (show_gui) {
+      ImGui::SFML::Render(window);
+    }
     // end the current frame
     window.display();
   }

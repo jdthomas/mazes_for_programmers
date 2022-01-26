@@ -6,10 +6,15 @@
     "cxxopts",
     "fmt",
     "gtest",
+    {
+      "name": "imgui",
+      "features": ["freetype", "osx-binding", "opengl3-binding"]
+    },
+    "imgui-sfml",
     "libpng",
     "mdspan",
-    "pngpp",
     "parallelstl",
+    "pngpp",
     "range-v3",
     "tbb",
     {
