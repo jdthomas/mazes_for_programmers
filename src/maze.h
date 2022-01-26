@@ -404,6 +404,7 @@ struct DenseGridRepr : GridReprCommon {
     bool check_flag(Flags f) const { return 0 != (to_underlying(f) & flags); }
   };
   static constexpr Cell a_closed_cell{0xff, 0x00};
+  static constexpr Cell a_open_cell{0x00, 0x00};
 
   std::vector<Cell> grid_;
   stdex::mdspan<Cell,
@@ -469,6 +470,7 @@ struct DenseGridRepr : GridReprCommon {
 
   // Reset grid to all solid walls
   void reset() { ranges::fill(grid_, a_closed_cell); }
+  void reset_open() { ranges::fill(grid_, a_open_cell); }
 };
 
 struct Grid : DenseGridRepr {

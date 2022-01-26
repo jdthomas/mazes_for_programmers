@@ -523,10 +523,16 @@ void ellers_maze(Grid &grid) {
 }
 GeneratorRegistry::RegisterGenerator el('4', "Ellers", ellers_maze);
 
-void recursive_division_maze(Grid &grid) {}
+void recursive_division_maze(Grid &grid) {
+  grid.reset_open();
+}
 GeneratorRegistry::RegisterGenerator rd('5', "RecursiveDivision",
                                         recursive_division_maze);
 
+void no_walls_maze(Grid &grid) {
+  grid.reset_open();
+}
+GeneratorRegistry::RegisterGenerator o('N', "NoWalls", no_walls_maze);
 void all_walls_maze(Grid &grid) {
   // default is all walls
 }
