@@ -580,9 +580,9 @@ struct Grid : DenseGridRepr {
               // o and return the cell past it -- TODO: Handle wrapping!
               auto n2 = CellCoordinate{n.row + (n.row - c.row),
                                        n.col + (n.col - c.col)};
-              fmt::print(
-                  "Crossing an undercell, replacing {} neighbor {} with {}\n",
-                  c, n, n2);
+              // fmt::print(
+              //     "Crossing an undercell, replacing {} neighbor {} with {}\n",
+              //     c, n, n2);
               return n2;
             }
             return n;

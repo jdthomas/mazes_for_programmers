@@ -965,6 +965,8 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
 
       ImGui::Begin("Settings");  // begin window
 
+      ImGui::BeginGroup();
+      ImGui::Text("Generation Settings");
       if (ImGui::Button("Generate New Maze")) {
         fmt::print("");
         // this code gets if user clicks on the button
@@ -972,6 +974,44 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
         // but I do this to show how buttons work :)
         need_regen = true;
       }
+      auto algo_names =
+          GeneratorRegistry::AllMethods() |
+          ranges::views::transform([](auto &x) { return x.name.c_str(); }) |
+          ranges::to<std::vector>;
+      if (ImGui::BeginCombo("Algorithm", algo_names.at(method_idx))) {
+        for (int n = 0; n < algo_names.size(); n++) {
+          bool is_selected = method_idx == n;
+          if (ImGui::Selectable(algo_names[n], is_selected)) {
+            method_idx = n;
+          }
+          if (is_selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+      }
+      // ImGui::Checkbox("Weaving", &dmaze->gen_settings.enable_weaving);
+      ImGui::Checkbox("Wrap east/west",
+                      /*&dmaze->gen_settings.allow_ew_wrap*/ &wrap_ew);
+
+      // struct GenerationSettings {
+      //   float braid_maze_ratio = 0.0f;
+      //   // bool allow_ew_wrap = false;
+      //   // bool enable_weaving = true;
+      //   // Gridsettings:
+      //   //  size_t height;
+      //   //  std::vector<size_t> widths_;
+      //   //  mask ?
+      // };
+
+      ImGui::EndGroup();
+
+      ImGui::BeginGroup();
+      ImGui::Text("View Settings");
+      ImGui::Checkbox("Show Solition", &dmaze->view_settings.show_solution);
+      ImGui::Checkbox("Show inset", &dmaze->view_settings.show_inset);
+      ImGui::Checkbox("Show as hex", &dmaze->view_settings.show_as_hex);
+      ImGui::Checkbox("Show as polar", &dmaze->view_settings.polar_maze);
+      ImGui::EndGroup();
+
       ImGui::End();  // end window
     }
 
