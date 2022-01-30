@@ -82,14 +82,13 @@ void binary_tree_maze_p2(Grid &grid) {
       grid.link(cell, *e);
   };
 
-  auto r = ranges::views::iota(static_cast<size_t>(0),
-                               static_cast<size_t>(grid.height_));
-  std::for_each(pstl::execution::par_unseq, r.begin(), r.end(),
-                [&](const auto &row) {
-                  for (size_t col = 0; col < grid.widths_.back(); col++) {
-                    per_cell_action(CellCoordinate{row, col});
-                  }
-                });
+  auto r = ranges::views::iota(0, grid.grid_settings.height);
+  std::for_each(
+      pstl::execution::par_unseq, r.begin(), r.end(), [&](const auto &row) {
+        for (int col = 0; col < grid.grid_settings.widths.back(); col++) {
+          per_cell_action(CellCoordinate{row, col});
+        }
+      });
 }
 GeneratorRegistry::RegisterGenerator b3('D', "BinaryTree(Parallel - 2)",
                                         binary_tree_maze_p2);
@@ -100,17 +99,16 @@ GeneratorRegistry::RegisterGenerator b3('D', "BinaryTree(Parallel - 2)",
 void sidewinder_maze(Grid &grid) {
   std::bernoulli_distribution d(0.5);
 
-  auto r = ranges::views::iota(static_cast<size_t>(0),
-                               static_cast<size_t>(grid.height_ - 1));
+  auto r = ranges::views::iota(0, grid.grid_settings.height - 1);
   std::for_each(r.begin(), r.end(), [&grid, &d](const auto &row) {
-    size_t run_start = 0;
-    for (size_t col = 0; col < grid.widths_.back(); col++) {
+    int run_start = 0;
+    for (int col = 0; col < grid.grid_settings.widths.back(); col++) {
       auto e = grid.cell_east({row, col});
       auto s = grid.cell_south({row, col});
       bool should_close = !e || (s && d(grid.gen));
       if (should_close) {
         std::uniform_int_distribution<> distrib(run_start, col);
-        size_t c = static_cast<size_t>(distrib(grid.gen));
+        int c = distrib(grid.gen);
         grid.link({row, c}, {row + 1, c});
         run_start = col + 1;
         c = run_start;
@@ -120,8 +118,8 @@ void sidewinder_maze(Grid &grid) {
     }
   });
   // FIXME: Fix last rows
-  for (size_t col = 0; col < grid.widths_.back() - 1; col++) {
-    const size_t row = grid.height_ - 1;
+  for (int col = 0; col < grid.grid_settings.widths.back() - 1; col++) {
+    const int row = grid.grid_settings.height - 1;
     grid.link({row, col}, {row, col + 1});
   }
 }
@@ -130,18 +128,18 @@ GeneratorRegistry::RegisterGenerator s('S', "Sidewinder", sidewinder_maze);
 void sidewinder_maze_p(Grid &grid) {
   std::bernoulli_distribution d(0.5);
 
-  auto r = ranges::views::iota(static_cast<size_t>(0),
-                               static_cast<size_t>(grid.height_ - 1));
+  auto r = ranges::views::iota(0, grid.grid_settings.height - 1);
   std::for_each(pstl::execution::par_unseq, r.begin(), r.end(),
                 [&grid, &d](const auto &row) {
-                  size_t run_start = 0;
-                  for (size_t col = 0; col < grid.widths_.back(); col++) {
+                  int run_start = 0;
+                  for (int col = 0; col < grid.grid_settings.widths.back();
+                       col++) {
                     auto e = grid.cell_east({row, col});
                     auto s = grid.cell_south({row, col});
                     bool should_close = !e || (s && d(grid.gen));
                     if (should_close) {
                       std::uniform_int_distribution<> distrib(run_start, col);
-                      size_t c = static_cast<size_t>(distrib(grid.gen));
+                      int c = distrib(grid.gen);
                       grid.link({row, c}, {row + 1, c});
                       run_start = col + 1;
                     } else {
@@ -150,8 +148,8 @@ void sidewinder_maze_p(Grid &grid) {
                   }
                 });
   // FIXME: Fix last rows
-  for (size_t col = 0; col < grid.widths_.back() - 1; col++) {
-    const size_t row = grid.height_ - 1;
+  for (int col = 0; col < grid.grid_settings.widths.back() - 1; col++) {
+    const int row = grid.grid_settings.height - 1;
     grid.link({row, col}, {row, col + 1});
   }
 }
@@ -163,7 +161,8 @@ GeneratorRegistry::RegisterGenerator s2('s', "Sidewinder(Parallel - 1)",
 //////////////////////////////////////////////////////////////////////////////
 void random_walk_Aldous_Broder_maze(Grid &grid) {
   auto cell = grid.random_cell();
-  int unvisited = grid.widths_.back() * grid.height_ - 1;
+  int unvisited =
+      grid.grid_settings.widths.back() * grid.grid_settings.height - 1;
   while (unvisited > 0) {
     auto neighbor = *grid.random_neighbor(cell);
 
@@ -352,9 +351,11 @@ void kruskel_maze(Grid &grid) {
     }
   }
   // crossings
-  if (grid.enable_weaving) {
+  if (grid.grid_settings.enable_weaving) {
     // TODO: Paramatarize how many crosses to attempt adding
-    for (int i = 0; i < grid.widths_.back() * grid.height_; i++) {
+    for (int i = 0;
+         i < grid.grid_settings.widths.back() * grid.grid_settings.height;
+         i++) {
       auto c = grid.random_cell();
       add_crossing(c);
     }
@@ -440,7 +441,7 @@ GeneratorRegistry::RegisterGenerator glos('3', "GrowLastOrSample",
                                           grow_last_or_sample_maze);
 
 void ellers_maze(Grid &grid) {
-  std::unordered_map<size_t, int> set_for_col{};
+  std::unordered_map<int, int> set_for_col{};
   std::unordered_map<int, std::set<CellCoordinate>> cells_in_set{};
   std::bernoulli_distribution d(0.5);
   int next_set = 0;
@@ -479,10 +480,9 @@ void ellers_maze(Grid &grid) {
     return set_for_col[cell.col];
   };
 
-  auto r = ranges::views::iota(static_cast<size_t>(0),
-                               static_cast<size_t>(grid.height_));
+  auto r = ranges::views::iota(0, grid.grid_settings.height);
   std::for_each(r.begin(), r.end(), [&](const auto &row) {
-    for (size_t col = 0; col < grid.widths_.back(); col++) {
+    for (int col = 0; col < grid.grid_settings.widths.back(); col++) {
       CellCoordinate cell{row, col};
       auto w = grid.cell_west(cell);
       if (!w) continue;
@@ -528,13 +528,13 @@ void ellers_maze(Grid &grid) {
 GeneratorRegistry::RegisterGenerator el('4', "Ellers", ellers_maze);
 
 namespace {
-void recursive_division_maze_divide_h(Grid &grid, size_t row, size_t col,
-                                      size_t height, size_t width);
-void recursive_division_maze_divide_v(Grid &grid, size_t row, size_t col,
-                                      size_t height, size_t width);
+void recursive_division_maze_divide_h(Grid &grid, int row, int col, int height,
+                                      int width);
+void recursive_division_maze_divide_v(Grid &grid, int row, int col, int height,
+                                      int width);
 
-void recursive_division_maze_divide(Grid &grid, size_t row, size_t col,
-                                    size_t height, size_t width) {
+void recursive_division_maze_divide(Grid &grid, int row, int col, int height,
+                                    int width) {
   if (height <= 1 || width <= 1) {
     return;
   }
@@ -543,8 +543,8 @@ void recursive_division_maze_divide(Grid &grid, size_t row, size_t col,
   else
     recursive_division_maze_divide_v(grid, row, col, height, width);
 }
-void recursive_division_maze_divide_h(Grid &grid, size_t row, size_t col,
-                                      size_t height, size_t width) {
+void recursive_division_maze_divide_h(Grid &grid, int row, int col, int height,
+                                      int width) {
   std::uniform_int_distribution<> dis_h(0, height - 1);
   std::uniform_int_distribution<> dis_w(0, width);
   auto divide_south_of = dis_h(grid.gen);
@@ -563,8 +563,8 @@ void recursive_division_maze_divide_h(Grid &grid, size_t row, size_t col,
   recursive_division_maze_divide(grid, row + divide_south_of + 1, col,
                                  height - divide_south_of - 1, width);
 }
-void recursive_division_maze_divide_v(Grid &grid, size_t row, size_t col,
-                                      size_t height, size_t width) {
+void recursive_division_maze_divide_v(Grid &grid, int row, int col, int height,
+                                      int width) {
   std::uniform_int_distribution<> dis_h(0, height);
   std::uniform_int_distribution<> dis_w(0, width - 1);
   auto divide_east_of = dis_w(grid.gen);
@@ -587,7 +587,8 @@ void recursive_division_maze_divide_v(Grid &grid, size_t row, size_t col,
 
 void recursive_division_maze(Grid &grid) {
   grid.reset_open();
-  recursive_division_maze_divide(grid, 0, 0, grid.height_, grid.widths_.back());
+  recursive_division_maze_divide(grid, 0, 0, grid.grid_settings.height,
+                                 grid.grid_settings.widths.back());
 }
 GeneratorRegistry::RegisterGenerator rd('5', "RecursiveDivision",
                                         recursive_division_maze);

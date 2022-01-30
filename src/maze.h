@@ -21,7 +21,7 @@
 namespace jt::maze {
 namespace stdex = std::experimental;
 
-std::vector<size_t> calculate_variable_widths(size_t height);
+std::vector<int> calculate_variable_widths(int height);
 
 template <typename E>
 constexpr auto to_underlying(E e) noexcept {
@@ -38,30 +38,41 @@ auto jt_range_front(R &&rng) {
 }
 
 struct CellCoordinate {
-  size_t row, col;
+  int row, col;
 };
 
 bool operator<(const CellCoordinate &a, const CellCoordinate &b);
 bool operator==(const CellCoordinate &a, const CellCoordinate &b);
 struct cell_coordinate_hash_fn {
   std::size_t operator()(const CellCoordinate &cell) const {
-    std::size_t h1 = std::hash<size_t>()(cell.row);
-    std::size_t h2 = std::hash<size_t>()(cell.col);
+    std::size_t h1 = std::hash<int>()(cell.row);
+    std::size_t h2 = std::hash<int>()(cell.col);
 
     return h1 ^ h2;
   }
 };
 
 struct GridMask {
-  size_t width, height;
+  bool valid_mask = false;
   std::vector<uint8_t> mask;
+};
+struct GridSettings {
+  int height = 4;
+  int width = 4;
+  bool allow_ew_wrap = false;
+  bool enable_weaving = true;
+  std::vector<int> widths;
+  GridMask mask;
 };
 
 enum class CellShape { Square, Hex, Triange };
 
 struct GridReprCommon {
-  GridReprCommon(size_t width, size_t height)
-      : widths_(height, width), height_{height} {};
+  GridReprCommon(GridSettings settings) : grid_settings{settings} {
+    // FIXME: Fill widths with widths
+    grid_settings.widths =
+        std::vector<int>(grid_settings.height, grid_settings.width);
+  };
 
  protected:
   static constexpr CellShape cs = CellShape::Square;
@@ -73,8 +84,8 @@ struct GridReprCommon {
     static_assert(to_underlying(Direction::E) == 2);
     static_assert(to_underlying(Direction::S) == 4);
     static_assert(to_underlying(Direction::W) == 6);
-    const auto h = height_;
-    const auto w = widths_[c.row];
+    const auto h = grid_settings.height;
+    const auto w = grid_settings.widths[c.row];
     // Square
     if constexpr (CellShape::Square == cs) {
       return {
@@ -93,8 +104,8 @@ struct GridReprCommon {
       const bool even_col = c.col % 2 == 0;
       const ssize_t diag_north = even_col ? -1 : 0;
       const ssize_t diag_south = even_col ? 0 : 1;
-      const auto wrap_h = [&](ssize_t row) { return (row + h) % h; };
-      const auto wrap_w = [&](ssize_t col) { return (col + w) % w; };
+      const auto wrap_h = [&](int row) { return (row + h) % h; };
+      const auto wrap_w = [&](int col) { return (col + w) % w; };
 
       return {
           CellCoordinate{wrap_h(c.row - 1), c.col},                       // N
@@ -144,18 +155,13 @@ struct GridReprCommon {
   };
 
  public:
-  bool allow_ew_wrap = false;
-  bool enable_weaving = true;
-  size_t height_;
-  std::vector<size_t> widths_;
+  GridSettings grid_settings;
 
   // Helper to generate all CellCoordinate for each cell
   auto positions() const {
     return ranges::views::cartesian_product(
-               ranges::views::iota(static_cast<size_t>(0),
-                                   static_cast<size_t>(height_)),
-               ranges::views::iota(static_cast<size_t>(0),
-                                   static_cast<size_t>(widths_.back()))) |
+               ranges::views::iota(0, grid_settings.height),
+               ranges::views::iota(0, grid_settings.widths.back())) |
            ranges::views::transform([](const auto &p) {
              const auto &[row, col] = p;
              return CellCoordinate{row, col};
@@ -240,25 +246,25 @@ struct GridReprCommon {
   //
   auto connected_cell_north(CellCoordinate c) const {
     auto n = cell_north(c);
-    if (enable_weaving && n && is_crossing_undercell(c, *n))
+    if (grid_settings.enable_weaving && n && is_crossing_undercell(c, *n))
       return cell_north(*n);
     return n && is_linked(c, *n) ? n : std::nullopt;
   }
   auto connected_cell_east(CellCoordinate c) const {
     auto n = cell_east(c);
-    if (enable_weaving && n && is_crossing_undercell(c, *n))
+    if (grid_settings.enable_weaving && n && is_crossing_undercell(c, *n))
       return cell_east(*n);
     return n && is_linked(c, *n) ? n : std::nullopt;
   }
   auto connected_cell_south(CellCoordinate c) const {
     auto n = cell_south(c);
-    if (enable_weaving && n && is_crossing_undercell(c, *n))
+    if (grid_settings.enable_weaving && n && is_crossing_undercell(c, *n))
       return cell_south(*n);
     return n && is_linked(c, *n) ? n : std::nullopt;
   }
   auto connected_cell_west(CellCoordinate c) const {
     auto n = cell_west(c);
-    if (enable_weaving && n && is_crossing_undercell(c, *n))
+    if (grid_settings.enable_weaving && n && is_crossing_undercell(c, *n))
       return cell_west(*n);
     return n && is_linked(c, *n) ? n : std::nullopt;
   }
@@ -286,9 +292,9 @@ struct GridReprCommon {
     // Fixup for wrapping (never wrap N/S, optionally wrap E/W)
     neighbors |= ranges::actions::transform(
         [this, c](auto n) -> std::optional<CellCoordinate> {
-          return !n || (std::abs(ssize_t(c.row - n->row)) > 1) ||
-                         (std::abs(ssize_t(c.col - n->col)) > 1 &&
-                          !allow_ew_wrap)
+          return !n || (std::abs(c.row - n->row) > 1) ||
+                         (std::abs(c.col - n->col) > 1 &&
+                          !grid_settings.allow_ew_wrap)
                      ? std::nullopt
                      : n;
         });
@@ -358,7 +364,8 @@ struct GridReprCommon {
   bool can_tunnel_east(CellCoordinate c) const {
     auto n = cell_east(c);
     return n && cell_east(*n) && !is_under_cell(*n) && is_v_passage_cell(*n) &&
-           c.col < widths_[c.row] - 1 && n->col < widths_[n->row] - 1;
+           c.col < grid_settings.widths[c.row] - 1 &&
+           n->col < grid_settings.widths[n->row] - 1;
   }
 
   // these depend on the grid reprensation
@@ -380,10 +387,12 @@ struct SparceGridRepr : GridReprCommon {
 };
 
 struct DenseGridRepr : GridReprCommon {
-  DenseGridRepr(size_t width, size_t height)
-      : GridReprCommon(width, height),
-        grid_{width * height, a_closed_cell},
-        grid_view_{grid_.data(), height_, widths_.back()} {};
+  DenseGridRepr(GridSettings settings)
+      : GridReprCommon(settings),
+        grid_{static_cast<size_t>(grid_settings.width * grid_settings.height),
+              a_closed_cell},
+        grid_view_{grid_.data(), grid_settings.height,
+                   grid_settings.widths.back()} {};
   // enum class Direction { N, NE, E, SE, S, SW, W, NW };
   struct Cell {
     union {
@@ -435,11 +444,13 @@ struct DenseGridRepr : GridReprCommon {
   void link(CellCoordinate c1, CellCoordinate c2) override {
     // Weaving:
     // Check if we are a neighbor-neighbor
-    if (enable_weaving && (std::abs(ssize_t(c1.row - c2.row)) == 2) ||
-        (std::abs(ssize_t(c1.row - c2.row)) == (widths_[c1.row] - 2)) ||
-        (std::abs(ssize_t(c1.col - c2.col)) == 2)
-        // ((widths_[c1.row] + c1.col - c2.col) % widths_[c1.row]) == 2 ||
-        // ((height_ + c1.row - c2.row) % height_) == 2
+    if (grid_settings.enable_weaving && (std::abs(c1.row - c2.row) == 2) ||
+        (std::abs(c1.row - c2.row) == (grid_settings.widths[c1.row] - 2)) ||
+        (std::abs(c1.col - c2.col) == 2)
+        // ((grid_settings.widths[c1.row] + c1.col - c2.col) %
+        // grid_settings.widths[c1.row]) == 2 ||
+        // ((grid_settings.height + c1.row - c2.row) % grid_settings.height) ==
+        // 2
     ) {
       // Weave!
       CellCoordinate between = {(c1.row + c2.row) / 2, (c1.col + c2.col) / 2};
@@ -486,8 +497,20 @@ struct DenseGridRepr : GridReprCommon {
 };
 
 struct Grid : DenseGridRepr {
-  Grid(size_t width, size_t height);
-  Grid(GridMask msk) : Grid(msk.width, msk.height) { mask = msk.mask; };
+  Grid(int width, int height)
+      : Grid(GridSettings{
+            .width = width,
+            .height = height,
+            .mask = GridMask{.mask = std::vector<uint8_t>(width * height)},
+        }){};
+
+  Grid(GridSettings settings)
+      : DenseGridRepr(settings),
+        rd{},
+        gen{rd()},
+        mask{settings.mask.mask},
+        mask_as_mdspan_{mask.data(), grid_settings.height,
+                        grid_settings.widths.back()} {};
 
  private:
   std::random_device rd{};
@@ -507,7 +530,7 @@ struct Grid : DenseGridRepr {
   }
   bool masked_at(CellCoordinate c) const {
     auto m = mask_as_mdspan();
-    return 0 != m(c.row, c.col);
+    return grid_settings.mask.valid_mask && 0 != m(c.row, c.col);
   }
 
   // Helpers to get individual neighbors
@@ -534,19 +557,18 @@ struct Grid : DenseGridRepr {
 
   // Generate a random CellCoordinate within the grid
   auto random_cell() {
-    std::uniform_int_distribution<> d_w(0, widths_.back() - 1);
-    std::uniform_int_distribution<> d_h(0, height_ - 1);
+    std::uniform_int_distribution<> d_w(0, grid_settings.widths.back() - 1);
+    std::uniform_int_distribution<> d_h(0, grid_settings.height - 1);
     CellCoordinate c;
     do {
-      c = CellCoordinate{static_cast<size_t>(d_h(gen)),
-                         static_cast<size_t>(d_w(gen))};
+      c = CellCoordinate{d_h(gen), d_w(gen)};
     } while (masked_at(c));
     return c;
   }
 
   std::vector<CellCoordinate> get_all_neighbors(CellCoordinate c) const {
     auto n = get_all_neighbors_(c);
-    if (enable_weaving) {
+    if (grid_settings.enable_weaving) {
       auto n = get_all_neighbors_(c);
       auto rv = n | ranges::views::filter([](auto o) { return bool(o); }) |
                 ranges::views::transform([](auto o) { return *o; }) |
@@ -571,7 +593,7 @@ struct Grid : DenseGridRepr {
   }
 
   std::vector<CellCoordinate> get_connected_neighbors(CellCoordinate c) const {
-    if (enable_weaving) {
+    if (grid_settings.enable_weaving) {
       auto n = get_connected_neighbors_(c);
       auto rv = n | ranges::views::filter([](auto o) { return bool(o); }) |
                 ranges::views::transform([](auto o) { return *o; }) |
@@ -615,7 +637,7 @@ struct Grid : DenseGridRepr {
 
   // Helper for getting a random neighbor that is closed (no connections)
   std::optional<CellCoordinate> random_closed_neighbor(CellCoordinate c) {
-    if (enable_weaving) {
+    if (grid_settings.enable_weaving) {
       auto neighbors = get_all_neighbors(c);
       return jt_range_front(neighbors | ranges::views::filter([this](auto n) {
                               return is_closed_cell(n);
@@ -756,19 +778,19 @@ constexpr auto fmt::formatter<jt::maze::Grid>::parse(ParseContext &ctx) {
 template <typename FormatContext>
 auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
                                             FormatContext &ctx) {
-  if (grid.widths_.back() > 200 / 4) {
+  if (grid.grid_settings.widths.back() > 200 / 4) {
     return fmt::format_to(ctx.out(), "Maze too big for console!");
   }
   // Draw an initial boundry
-  for (int col = 0; col < grid.widths_.back(); col++) {
+  for (int col = 0; col < grid.grid_settings.widths.back(); col++) {
     auto c = '-';
     fmt::format_to(ctx.out(), "{}{}{}+", c, c, c);
   }
   fmt::format_to(ctx.out(), "\n");
 
-  for (size_t row = 0; row < grid.height_; row++) {
+  for (int row = 0; row < grid.grid_settings.height; row++) {
     // Draw verticals
-    for (size_t col = 0; col < grid.widths_.back(); col++) {
+    for (int col = 0; col < grid.grid_settings.widths.back(); col++) {
       char c = grid(jt::maze::CellCoordinate{row, col}).e ? '|' : ' ';
       // v_wall_to_char(grid(jt::maze::CellCoordinate{row, col}).right)
       fmt::format_to(ctx.out(), "   {}", c);
@@ -776,7 +798,7 @@ auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
     fmt::format_to(ctx.out(), "\n");
 
     // Draw horizantals
-    for (size_t col = 0; col < grid.widths_.back(); col++) {
+    for (int col = 0; col < grid.grid_settings.widths.back(); col++) {
       // auto c = h_wall_to_char(grid(jt::maze::CellCoordinate{row, col}).down);
       char c = grid(jt::maze::CellCoordinate{row, col}).s ? '-' : ' ';
       fmt::format_to(ctx.out(), "{}{}{}+", c, c, c);
@@ -784,6 +806,7 @@ auto fmt::formatter<jt::maze::Grid>::format(jt::maze::Grid const &grid,
     fmt::format_to(ctx.out(), "\n");
   }
 
-  return fmt::format_to(ctx.out(), "... {} x {}\n", grid.widths_.back(),
-                        grid.height_);
+  return fmt::format_to(ctx.out(), "... {} x {}\n",
+                        grid.grid_settings.widths.back(),
+                        grid.grid_settings.height);
 }

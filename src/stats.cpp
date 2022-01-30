@@ -1,12 +1,13 @@
+#include <fmt/chrono.h>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
 #include <deque>
 #include <experimental/mdspan>
-#include <fmt/chrono.h>
-#include <fmt/format.h>
-#include <fmt/ranges.h>
 #include <iostream>
 #include <mutex>
 #if defined(__GLIBCXX__)
@@ -25,16 +26,13 @@ namespace pstl = std;
 #include "maze.h"
 
 int main(int argc, char **argv) {
-
-  if (argc < 2)
-    return 1;
-  jt::maze::Grid grid{static_cast<size_t>(std::strtol(argv[1], nullptr, 10)),
-                      static_cast<size_t>(std::strtol(argv[2], nullptr, 10))};
+  if (argc < 2) return 1;
+  jt::maze::Grid grid{static_cast<int>(std::strtol(argv[1], nullptr, 10)),
+                      static_cast<int>(std::strtol(argv[2], nullptr, 10))};
   std::unordered_map<std::string, float> averages;
   jt::maze::ensure_registry();
   // we run stats instead!
   for (auto &m : jt::maze::GeneratorRegistry::AllMethods()) {
-
     std::vector<int> dead_count;
     for (int i = 0; i < 100; i++) {
       grid.reset();
@@ -50,9 +48,11 @@ int main(int argc, char **argv) {
     averages[m.name] =
         float(ranges::accumulate(dead_count, 0)) / dead_count.size();
   }
-  auto cell_count = grid.widths_.back() * grid.height_;
-  fmt::print("Average dead-ends per {}x#{} maze ({} cells):\n", grid.widths_.back(),
-             grid.height_, cell_count);
+  auto cell_count =
+      grid.grid_settings.widths.back() * grid.grid_settings.height;
+  fmt::print("Average dead-ends per {}x#{} maze ({} cells):\n",
+             grid.grid_settings.widths.back(), grid.grid_settings.height,
+             cell_count);
 
   std::vector<std::pair<std::string, float>> sorted_avgs;
   std::copy(averages.begin(), averages.end(), std::back_inserter(sorted_avgs));

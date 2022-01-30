@@ -42,20 +42,31 @@ using namespace jt::maze;
 // GUI output
 ////////////////////////////////////////////////////////////////////////////////
 
-bool use_polar_widths = false;
-
 struct DrawableMaze {
-  DrawableMaze(GridMask msk, const GeneratorRegistry::RegistryConfig &method,
-               bool wrap_ew)
-      : grid{msk} {
-    grid.allow_ew_wrap = wrap_ew;
+  struct GenerationSettings {
+    float braid_maze_ratio = 0.0f;
+    size_t method_idx = 0;
+    bool use_polar_widths = false;
+    GridSettings grid_settings;
+  };
+  struct ViewSettings {
+    bool show_solution = false;
+    bool polar_maze = false;
+    bool show_inset = true;
+    bool show_as_hex = false;
+  };
+
+  DrawableMaze(GenerationSettings gen)
+      : gen_settings{gen}, grid{gen.grid_settings} {
+    const auto &method =
+        GeneratorRegistry::GetMazeGeneratorByIndex(gen.method_idx);
     init(method);
   }
-  DrawableMaze(size_t width, size_t height,
-               const GeneratorRegistry::RegistryConfig &method)
-      : grid{width, height} {
-    init(method);
-  }
+  // DrawableMaze(int width, int height,
+  //              const GeneratorRegistry::RegistryConfig &method)
+  //     : grid{width, height} {
+  //   init(method);
+  // }
 
   void init(const GeneratorRegistry::RegistryConfig &method) {
     using std::chrono::high_resolution_clock;
@@ -65,11 +76,13 @@ struct DrawableMaze {
 
     braid_maze(grid, gen_settings.braid_maze_ratio);
 
-    if (use_polar_widths) {
-      grid.widths_ = calculate_variable_widths(grid.height_);
+    if (gen_settings.use_polar_widths) {
+      grid.grid_settings.widths =
+          calculate_variable_widths(grid.grid_settings.height);
     }
     CellCoordinate start_pos =
-        grid.random_cell();  // {grid.widths_.back() / 2, grid.height_ / 2};
+        grid.random_cell();  // {grid.grid_settings.widths.back() / 2,
+                             // grid.grid_settings.height / 2};
     distances = dijkstra_distances(grid, start_pos);
     path = longest_path_(grid, distances);
     method_name = method.name;
@@ -89,8 +102,8 @@ struct DrawableMaze {
     colorizer = [this](auto &g, auto c, auto r) {
       auto d = stdex::mdspan<
           int, stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>(
-          this->distances.data(), this->grid.height_,
-          this->grid.widths_.back());
+          this->distances.data(), this->grid.grid_settings.height,
+          this->grid.grid_settings.widths.back());
       int shade = 255 * d(c, r) / this->max_path_len;
       return sf::Color(shade, shade, shade);
     };
@@ -113,22 +126,6 @@ struct DrawableMaze {
   std::function<sf::Color(const Grid &, int, int)> colorizer;  // FIXME
   std::vector<CellCoordinate> player_path{};
 
-  struct GenerationSettings {
-    float braid_maze_ratio = 0.0f;
-    // bool allow_ew_wrap = false;
-    // bool enable_weaving = true;
-    // Gridsettings:
-    //  size_t height;
-    //  std::vector<size_t> widths_;
-    //  mask ?
-  };
-  struct ViewSettings {
-    bool show_solution = false;
-    bool polar_maze = false;
-    bool show_inset = true;
-    bool show_as_hex = false;
-  };
-
   GenerationSettings gen_settings;
   ViewSettings view_settings;
 };
@@ -148,7 +145,8 @@ auto draw_path = [](const Grid &grid, sf::RenderWindow &window,
       },
       [center_of_cell, line_color, &grid](auto pos) {
         auto &[row, col] = pos;
-        assert(row < grid.height_ && col < grid.widths_.back());
+        assert(row < grid.grid_settings.height &&
+               col < grid.grid_settings.widths.back());
         const auto &[draw_pos_first, draw_pos_second] = center_of_cell(pos);
         return sf::Vertex(sf::Vector2f(draw_pos_first, draw_pos_second),
                           line_color);
@@ -661,14 +659,16 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
 void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   auto window_size = window.getSize();
   const float cell_width =
-      800.0 / (2 * dmaze.grid.height_ + 2);  // yes use height
-  const float cell_height = 600.0 / (2 * dmaze.grid.height_ + 2);
+      800.0 / (2 * dmaze.grid.grid_settings.height + 2);  // yes use height
+  const float cell_height = 600.0 / (2 * dmaze.grid.grid_settings.height + 2);
   const auto cell_size = std::min(cell_width, cell_height);
   const auto line_color = sf::Color::Green;
   const auto center_x = 400;
   const auto center_y = 300;
   constexpr double pi = M_PI;
-  const auto theta = [&](auto row) { return 2 * pi / dmaze.grid.widths_[row]; };
+  const auto theta = [&](auto row) {
+    return 2 * pi / dmaze.grid.grid_settings.widths[row];
+  };
 
   const auto cell_to_draw_x = [&](const auto row, const auto col) -> float {
     const auto radius = row * cell_size;
@@ -734,7 +734,7 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
 
   // Draw outer boundry
   {
-    auto rad = cell_size * (dmaze.grid.height_);
+    auto rad = cell_size * (dmaze.grid.grid_settings.height);
     sf::CircleShape shape(rad);
     shape.setFillColor(sf::Color::Black);
     shape.setOutlineColor(line_color);
@@ -749,8 +749,8 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
 
 void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   auto window_size = window.getSize();
-  const float cell_width = 800.0 / (dmaze.grid.widths_.back() + 2);
-  const float cell_height = 600.0 / (dmaze.grid.height_ + 2);
+  const float cell_width = 800.0 / (dmaze.grid.grid_settings.widths.back() + 2);
+  const float cell_height = 600.0 / (dmaze.grid.grid_settings.height + 2);
   const auto line_color = sf::Color::Green;
 
   const auto cell_to_draw_x = [&](const auto row) {
@@ -812,13 +812,14 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
                           cell_width, cell_height);
 }
 
-void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
-  bool wrap_ew = false;
+void gui_main(DrawableMaze::GenerationSettings gen) {
   std::unique_ptr<DrawableMaze> dmaze;
-  auto regen_maze = [&dmaze, &method_idx, &width, &height, &mask, &wrap_ew]() {
-    const auto &method = GeneratorRegistry::GetMazeGeneratorByIndex(method_idx);
-    // dmaze = std::make_unique<DrawableMaze>(width, height, method);
-    dmaze = std::make_unique<DrawableMaze>(mask, method, wrap_ew);
+  auto regen_maze = [&dmaze, &gen]() {
+    DrawableMaze::ViewSettings view_settings;
+    if(dmaze)
+      std::swap(view_settings, dmaze->view_settings);
+    dmaze = std::make_unique<DrawableMaze>(gen);
+    std::swap(view_settings, dmaze->view_settings);
   };
 
   regen_maze();
@@ -859,19 +860,19 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
         case sf::Event::TextEntered:
           switch (event.text.unicode) {
             case '-':
-              width--;
+              gen.grid_settings.width--;
               need_regen = true;
               break;
             case '+':
-              width++;
+              gen.grid_settings.width++;
               need_regen = true;
               break;
             case '[':
-              height--;
+              gen.grid_settings.height--;
               need_regen = true;
               break;
             case ']':
-              height++;
+              gen.grid_settings.height++;
               need_regen = true;
               break;
 
@@ -880,15 +881,16 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
               break;
             case 'j':
             case 'J':
-              method_idx =
-                  (method_idx + 1) % GeneratorRegistry::GetMazeGeneratorCount();
+              gen.method_idx = (gen.method_idx + 1) %
+                               GeneratorRegistry::GetMazeGeneratorCount();
               need_regen = true;
               break;
             case 'k':
             case 'K':
-              method_idx = (method_idx +
-                            GeneratorRegistry::GetMazeGeneratorCount() - 1) %
-                           GeneratorRegistry::GetMazeGeneratorCount();
+              gen.method_idx =
+                  (gen.method_idx + GeneratorRegistry::GetMazeGeneratorCount() -
+                   1) %
+                  GeneratorRegistry::GetMazeGeneratorCount();
               need_regen = true;
               break;
             case 'i':
@@ -900,7 +902,8 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
                   !dmaze->view_settings.polar_maze;
               break;
             case 'w':
-              wrap_ew = !wrap_ew;
+              gen.grid_settings.allow_ew_wrap =
+                  !gen.grid_settings.allow_ew_wrap;
               need_regen = true;
               break;
             case 'p':
@@ -978,29 +981,24 @@ void gui_main(size_t width, size_t height, size_t method_idx, GridMask mask) {
           GeneratorRegistry::AllMethods() |
           ranges::views::transform([](auto &x) { return x.name.c_str(); }) |
           ranges::to<std::vector>;
-      if (ImGui::BeginCombo("Algorithm", algo_names.at(method_idx))) {
+      if (ImGui::BeginCombo("Algorithm", algo_names.at(gen.method_idx))) {
         for (int n = 0; n < algo_names.size(); n++) {
-          bool is_selected = method_idx == n;
+          bool is_selected = gen.method_idx == n;
           if (ImGui::Selectable(algo_names[n], is_selected)) {
-            method_idx = n;
+            gen.method_idx = n;
           }
           if (is_selected) ImGui::SetItemDefaultFocus();
         }
         ImGui::EndCombo();
       }
-      // ImGui::Checkbox("Weaving", &dmaze->gen_settings.enable_weaving);
-      ImGui::Checkbox("Wrap east/west",
-                      /*&dmaze->gen_settings.allow_ew_wrap*/ &wrap_ew);
+      ImGui::Checkbox("Weaving", &gen.grid_settings.enable_weaving);
+      ImGui::Checkbox("Wrap east/west", &gen.grid_settings.allow_ew_wrap);
+      ImGui::Checkbox("Polar Widths", &gen.use_polar_widths);
 
-      // struct GenerationSettings {
-      //   float braid_maze_ratio = 0.0f;
-      //   // bool allow_ew_wrap = false;
-      //   // bool enable_weaving = true;
-      //   // Gridsettings:
-      //   //  size_t height;
-      //   //  std::vector<size_t> widths_;
-      //   //  mask ?
-      // };
+      ImGui::SliderFloat("Braiding Ratio", &gen.braid_maze_ratio, 0.0f, 1.0f,
+                         "ratio = %.3f");
+      ImGui::SliderInt("Height", &gen.grid_settings.height, 4, 200);
+      ImGui::SliderInt("Width", &gen.grid_settings.width, 4, 200);
 
       ImGui::EndGroup();
 
@@ -1054,7 +1052,7 @@ static void gui_usage() {
   fmt::print(description);
 }
 
-static auto read_mask(std::string fn, size_t width, size_t height, bool invert)
+static auto read_mask(std::string fn, int width, int height, bool invert)
     -> GridMask {
   png::image<png::gray_pixel> image(fn);
   width = width == 0 ? image.get_width() : width;
@@ -1073,15 +1071,15 @@ static auto read_mask(std::string fn, size_t width, size_t height, bool invert)
       d(i, j) = pix_to_mask(image.get_pixel(j, i));
     }
   fmt::print("{}", mask);
-  return GridMask{width, height, std::move(mask)};
+  return GridMask{true, std::move(mask)};
 }
 
 int main(int argc, char **argv) {
   cxxopts::Options options("maze_gui", "Play with mazes!");
   // clang-format off
   options.add_options()
-    ("w,width", "width of maze to generate", cxxopts::value<size_t>()->default_value("10"))
-    ("v,height", "width of maze to generate", cxxopts::value<size_t>()->default_value("10"))
+    ("w,width", "width of maze to generate", cxxopts::value<int>()->default_value("10"))
+    ("v,height", "width of maze to generate", cxxopts::value<int>()->default_value("10"))
     ("m,mask", "File name", cxxopts::value<std::string>())
     ("i,invert", "Invert the mask",  cxxopts::value<bool>()->default_value("false"))
     ("d,method", "Name of generation method",  cxxopts::value<std::string>()->default_value("R"))
@@ -1094,12 +1092,14 @@ int main(int argc, char **argv) {
     fmt::print("{}\n", options.help());
     return 0;
   }
-  size_t width = result["width"].as<size_t>();
-  size_t height = result["height"].as<size_t>();
+  int width = result["width"].as<int>();
+  int height = result["height"].as<int>();
+
+  DrawableMaze::GenerationSettings gen;
 
   // Calculate polar grid widths and set new width to max of that
   auto w = calculate_variable_widths(height);
-  if (use_polar_widths) {
+  if (gen.use_polar_widths) {
     width = w.back();
   }
 
@@ -1108,7 +1108,7 @@ int main(int argc, char **argv) {
   auto msk = result.count("mask")
                  ? read_mask(result["mask"].as<std::string>(), width, height,
                              result["invert"].as<bool>())
-                 : GridMask{width, height, {}};
+                 : GridMask{false, {}};
   auto method_name = result["method"].as<std::string>();
   size_t method_idx =
       GeneratorRegistry::GetMazeGeneratorIndexByShortName(method_name[0]);
@@ -1118,7 +1118,7 @@ int main(int argc, char **argv) {
 
   msk.mask.resize(width * height);
   // Mask out the polar part east of width
-  if (use_polar_widths) {
+  if (gen.use_polar_widths) {
     for (auto p : ranges::views::enumerate(w)) {
       auto &[r, c] = p;
       stdex::mdspan<
@@ -1132,7 +1132,11 @@ int main(int argc, char **argv) {
     }
   }
 
-  gui_main(width, height, method_idx, msk);
+  gen.method_idx = method_idx;
+  gen.grid_settings.height = height;
+  gen.grid_settings.width = width;
+  gen.grid_settings.mask = std::move(msk);
+  gui_main(gen);
 
   return 0;
 }

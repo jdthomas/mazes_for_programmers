@@ -59,8 +59,8 @@ BENCHMARK(BM_ranlux24);
 #endif
 
 static void BM_binary_tree(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -73,8 +73,8 @@ static void BM_binary_tree(benchmark::State &state) {
 BENCHMARK(BM_binary_tree)->RangeMultiplier(2)->Range(8, 8 << 10)->Complexity();
 
 static void BM_binary_tree_p(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -90,8 +90,8 @@ BENCHMARK(BM_binary_tree_p)
     ->Complexity();
 
 static void BM_binary_tree_p2(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -107,8 +107,8 @@ BENCHMARK(BM_binary_tree_p2)
     ->Complexity();
 
 static void BM_sidewinder(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -121,8 +121,8 @@ static void BM_sidewinder(benchmark::State &state) {
 BENCHMARK(BM_sidewinder)->RangeMultiplier(2)->Range(8, 8 << 10)->Complexity();
 
 static void BM_sidewinder_p(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -135,8 +135,8 @@ static void BM_sidewinder_p(benchmark::State &state) {
 BENCHMARK(BM_sidewinder_p)->RangeMultiplier(2)->Range(8, 8 << 10)->Complexity();
 
 static void BM_random_walk_Aldous_Broder(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -152,8 +152,8 @@ BENCHMARK(BM_random_walk_Aldous_Broder)
     ->Complexity();
 
 static void BM_random_walk_Wilson(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -169,8 +169,8 @@ BENCHMARK(BM_random_walk_Wilson)
     ->Complexity();
 
 static void BM_hunt_and_kill(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -183,8 +183,8 @@ static void BM_hunt_and_kill(benchmark::State &state) {
 BENCHMARK(BM_hunt_and_kill)->RangeMultiplier(2)->Range(8, 8 << 4)->Complexity();
 
 static void BM_recursive_backtracking(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -200,8 +200,8 @@ BENCHMARK(BM_recursive_backtracking)
     ->Complexity();
 
 static void BM_Kruskel(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -214,8 +214,8 @@ static void BM_Kruskel(benchmark::State &state) {
 BENCHMARK(BM_Kruskel)->RangeMultiplier(2)->Range(8, 8 << 3)->Complexity();
 
 static void BM_Prims(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -228,8 +228,8 @@ static void BM_Prims(benchmark::State &state) {
 BENCHMARK(BM_Prims)->RangeMultiplier(2)->Range(8, 8 << 4)->Complexity();
 
 static void BM_GrowSample(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -242,8 +242,8 @@ static void BM_GrowSample(benchmark::State &state) {
 BENCHMARK(BM_GrowSample)->RangeMultiplier(2)->Range(8, 8 << 4)->Complexity();
 
 static void BM_GrowLast(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -256,8 +256,8 @@ static void BM_GrowLast(benchmark::State &state) {
 BENCHMARK(BM_GrowLast)->RangeMultiplier(2)->Range(8, 8 << 4)->Complexity();
 
 static void BM_GrowLastOrSample(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -273,8 +273,8 @@ BENCHMARK(BM_GrowLastOrSample)
     ->Complexity();
 
 static void BM_Ellers(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -287,8 +287,8 @@ static void BM_Ellers(benchmark::State &state) {
 BENCHMARK(BM_Ellers)->RangeMultiplier(2)->Range(8, 8 << 4)->Complexity();
 
 static void BM_RecursiveDivision(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -304,8 +304,8 @@ BENCHMARK(BM_RecursiveDivision)
     ->Complexity();
 
 static void BM_NoWalls(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
@@ -318,8 +318,8 @@ static void BM_NoWalls(benchmark::State &state) {
 BENCHMARK(BM_NoWalls)->RangeMultiplier(2)->Range(8, 8 << 4)->Complexity();
 
 static void BM_AllWalls(benchmark::State &state) {
-  const size_t width = state.range(0);
-  const size_t height = state.range(0);
+  const int width = state.range(0);
+  const int height = state.range(0);
   jt::maze::Grid grid{width, height};
   for (auto _ : state) {
     state.PauseTiming();
