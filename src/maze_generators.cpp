@@ -313,7 +313,9 @@ void kruskel_maze(Grid &grid) {
     auto w = grid.cell_west(cell);
 
     if (!grid.is_closed_cell(cell) || !e || !w || !can_merge(*e, *w) || !n ||
-        !s || !can_merge(*n, *s)) {
+        !s || !can_merge(*n, *s) || !grid.can_tunnel_east(cell) ||
+        !grid.can_tunnel_west(cell) || !grid.can_tunnel_south(cell) ||
+        !grid.can_tunnel_north(cell)) {
       return false;
     }
     neighbors.erase(std::remove_if(neighbors.begin(), neighbors.end(),

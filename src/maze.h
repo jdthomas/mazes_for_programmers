@@ -352,11 +352,13 @@ struct GridReprCommon {
   }
   bool can_tunnel_west(CellCoordinate c) const {
     auto n = cell_west(c);
-    return n && cell_west(*n) && !is_under_cell(*n) && is_v_passage_cell(*n);
+    return n && cell_west(*n) && !is_under_cell(*n) && is_v_passage_cell(*n) &&
+           c.col > 0 && n->col > 0;
   }
   bool can_tunnel_east(CellCoordinate c) const {
     auto n = cell_east(c);
-    return n && cell_east(*n) && !is_under_cell(*n) && is_v_passage_cell(*n);
+    return n && cell_east(*n) && !is_under_cell(*n) && is_v_passage_cell(*n) &&
+           c.col < widths_[c.row] - 1 && n->col < widths_[n->row] - 1;
   }
 
   // these depend on the grid reprensation
@@ -571,23 +573,22 @@ struct Grid : DenseGridRepr {
   std::vector<CellCoordinate> get_connected_neighbors(CellCoordinate c) const {
     if (enable_weaving) {
       auto n = get_connected_neighbors_(c);
-      auto rv =
-          n | ranges::views::filter([](auto o) { return bool(o); }) |
-          ranges::views::transform([](auto o) { return *o; }) |
-          ranges::views::transform([this, c](auto n) {
-            if (is_crossing_undercell(c, n)) {
-              // neighbor is an under cell AND we are crossing it, so skip
-              // o and return the cell past it -- TODO: Handle wrapping!
-              auto n2 = CellCoordinate{n.row + (n.row - c.row),
-                                       n.col + (n.col - c.col)};
-              // fmt::print(
-              //     "Crossing an undercell, replacing {} neighbor {} with {}\n",
-              //     c, n, n2);
-              return n2;
-            }
-            return n;
-          }) |
-          ranges::to<std::vector>;
+      auto rv = n | ranges::views::filter([](auto o) { return bool(o); }) |
+                ranges::views::transform([](auto o) { return *o; }) |
+                ranges::views::transform([this, c](auto n) {
+                  if (is_crossing_undercell(c, n)) {
+                    // neighbor is an under cell AND we are crossing it, so skip
+                    // o and return the cell past it -- TODO: Handle wrapping!
+                    auto n2 = CellCoordinate{n.row + (n.row - c.row),
+                                             n.col + (n.col - c.col)};
+                    // fmt::print(
+                    //     "Crossing an undercell, replacing {} neighbor {} with
+                    //     {}\n", c, n, n2);
+                    return n2;
+                  }
+                  return n;
+                }) |
+                ranges::to<std::vector>;
       return rv;
     }
     auto n = get_connected_neighbors_(c);
