@@ -685,15 +685,15 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
       const auto [cx, cy] = hex_center_of_cell(cell);
       return CellCorner(cell_to_draw_x(cx, cy), cell_to_draw_y(cx, cy));
     } else {
-      const auto [cy, cx] = square_center_of_cell(cell);
+      const auto [cx, cy] = square_center_of_cell(cell);
       return CellCorner(cell_to_draw_x(cx, cy), cell_to_draw_y(cx, cy));
     }
   };
   auto cell_polygon = [&](auto cell) -> CellPoly {
-    const auto inner_radius = cell.row * cell_size;
-    const auto outer_radius = (cell.row + 1) * cell_size;
-    const auto theta_ccw = cell.col * theta(cell.row);
-    const auto theta_cw = (cell.col + 1) * theta(cell.row);
+    // const auto inner_radius = cell.row * cell_size;
+    // const auto outer_radius = (cell.row + 1) * cell_size;
+    // const auto theta_ccw = cell.col * theta(cell.row);
+    // const auto theta_cw = (cell.col + 1) * theta(cell.row);
 
     if (dmaze.view_settings.show_as_hex) {
       auto [fill_poly, segs] = hex_cell_to_segment_coords(cell, dmaze);
@@ -717,15 +717,15 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
       return {
           .i = center_of_cell(cell),
           .fill_poly = fill_poly | ranges::views::transform([&](auto pt) {
-                         return CellCorner{cell_to_draw_x(pt.y, pt.x),
-                                           cell_to_draw_y(pt.y, pt.x)};
+                         return CellCorner{cell_to_draw_x(pt.x, pt.y),
+                                           cell_to_draw_y(pt.x, pt.y)};
                        }) |
                        ranges::to<std::vector>,
           .segments = segs | ranges::views::transform([&](auto seg) {
-                        return CellSegment(cell_to_draw_x(seg.a.y, seg.a.x),
-                                           cell_to_draw_y(seg.a.y, seg.a.x),
-                                           cell_to_draw_x(seg.b.y, seg.b.x),
-                                           cell_to_draw_y(seg.b.y, seg.b.x));
+                        return CellSegment(cell_to_draw_x(seg.a.x, seg.a.y),
+                                           cell_to_draw_y(seg.a.x, seg.a.y),
+                                           cell_to_draw_x(seg.b.x, seg.b.y),
+                                           cell_to_draw_y(seg.b.x, seg.b.y));
                       }) |
                       ranges::to<std::vector>,
       };
