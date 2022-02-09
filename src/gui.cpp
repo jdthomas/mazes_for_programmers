@@ -70,16 +70,44 @@ struct DrawableMaze {
 
   void init(const GeneratorRegistry::RegistryConfig &method) {
     using std::chrono::high_resolution_clock;
+
+    if (gen_settings.use_polar_widths) {
+      gen_settings.grid_settings.widths =
+          calculate_variable_widths(gen_settings.grid_settings.height);
+
+      // FIXME
+      gen_settings.grid_settings.width =
+          gen_settings.grid_settings.widths.back();
+      gen_settings.grid_settings.mask.mask.resize(
+          gen_settings.grid_settings.width * gen_settings.grid_settings.height);
+      gen_settings.grid_settings.mask.valid_mask = true;
+      // Mask out the polar part east of width
+      for (auto p :
+           ranges::views::enumerate(gen_settings.grid_settings.widths)) {
+        auto &[r, c] = p;
+        stdex::mdspan<uint8_t, stdex::extents<stdex::dynamic_extent,
+                                              stdex::dynamic_extent>>
+            m{gen_settings.grid_settings.mask.mask.data(),
+              gen_settings.grid_settings.height,
+              gen_settings.grid_settings.width};
+        for (auto cc : ranges::views::iota(
+                 int(c), int(gen_settings.grid_settings.width))) {
+          m(r, cc) = 1;
+        }
+      }
+
+      // Yuck,
+      grid = Grid{gen_settings.grid_settings};
+      fmt::print("~~~~ Create new grid ({}, {}) ~~~~\n",
+                 gen_settings.grid_settings.widths, grid.grid_settings.widths);
+    }
+
     auto t1 = high_resolution_clock::now();
     method.generate(grid);
     auto t2 = high_resolution_clock::now();
 
     braid_maze(grid, gen_settings.braid_maze_ratio);
 
-    if (gen_settings.use_polar_widths) {
-      grid.grid_settings.widths =
-          calculate_variable_widths(grid.grid_settings.height);
-    }
     CellCoordinate start_pos =
         grid.random_cell();  // {grid.grid_settings.widths.back() / 2,
                              // grid.grid_settings.height / 2};
@@ -666,7 +694,7 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   const auto center_x = 400;
   const auto center_y = 300;
   constexpr double pi = M_PI;
-  const auto theta = [&](auto row) {
+  const auto theta = [&](auto row) -> double {
     return 2 * pi / dmaze.grid.grid_settings.widths[row];
   };
 
@@ -756,16 +784,18 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   const auto cell_to_draw_x = [&](const auto row) {
     return cell_height * (row + 1);
   };
-  const auto cell_to_draw_y = [&](const auto col) {
-    return cell_width * (col + 1);
+  const auto cell_to_draw_y = [&](const auto row, const auto col) {
+    // const float cw = 800.0 / (dmaze.grid.grid_settings.widths[row]);
+    const float cw = cell_width;
+    return cw * (col + 1);
   };
   const auto center_of_cell = [&](const auto cell) {
     if (dmaze.view_settings.show_as_hex) {
       const auto [cx, cy] = hex_center_of_cell(cell);
-      return CellCorner(cell_to_draw_y(cx), cell_to_draw_x(cy));
+      return CellCorner(cell_to_draw_y(cy, cx), cell_to_draw_x(cy));
     } else {
       const auto [cy, cx] = square_center_of_cell(cell);
-      return CellCorner(cell_to_draw_y(cx), cell_to_draw_x(cy));
+      return CellCorner(cell_to_draw_y(cy, cx), cell_to_draw_x(cy));
     }
   };
   auto cell_polygon = [&](auto cell) -> CellPoly {
@@ -777,14 +807,14 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
           .i = center_of_cell(cell),
           .fill_poly =
               fill_poly | ranges::views::transform([&](auto pt) {
-                return CellCorner{cell_to_draw_y(pt.x), cell_to_draw_x(pt.y)};
+                return CellCorner{cell_to_draw_y(pt.y, pt.x), cell_to_draw_x(pt.y)};
               }) |
               ranges::to<std::vector>,
           .segments = segs | ranges::views::transform([&](auto seg) {
                         return CellSegment(
                             // swap x,y
-                            cell_to_draw_y(seg.a.x), cell_to_draw_x(seg.a.y),
-                            cell_to_draw_y(seg.b.x), cell_to_draw_x(seg.b.y));
+                            cell_to_draw_y(seg.a.y, seg.a.x), cell_to_draw_x(seg.a.y),
+                            cell_to_draw_y(seg.b.y, seg.b.x), cell_to_draw_x(seg.b.y));
                       }) |
                       ranges::to<std::vector>,
       };
@@ -794,14 +824,14 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
           .i = center_of_cell(cell),
           .fill_poly =
               fill_poly | ranges::views::transform([&](auto pt) {
-                return CellCorner{cell_to_draw_y(pt.x), cell_to_draw_x(pt.y)};
+                return CellCorner{cell_to_draw_y(pt.y, pt.x), cell_to_draw_x(pt.y)};
               }) |
               ranges::to<std::vector>,
           .segments = segs | ranges::views::transform([&](auto seg) {
                         return CellSegment(
                             // swap x,y
-                            cell_to_draw_y(seg.a.x), cell_to_draw_x(seg.a.y),
-                            cell_to_draw_y(seg.b.x), cell_to_draw_x(seg.b.y));
+                            cell_to_draw_y(seg.a.y, seg.a.x), cell_to_draw_x(seg.a.y),
+                            cell_to_draw_y(seg.b.y, seg.b.x), cell_to_draw_x(seg.b.y));
                       }) |
                       ranges::to<std::vector>,
       };
@@ -816,8 +846,7 @@ void gui_main(DrawableMaze::GenerationSettings gen) {
   std::unique_ptr<DrawableMaze> dmaze;
   auto regen_maze = [&dmaze, &gen]() {
     DrawableMaze::ViewSettings view_settings;
-    if(dmaze)
-      std::swap(view_settings, dmaze->view_settings);
+    if (dmaze) std::swap(view_settings, dmaze->view_settings);
     dmaze = std::make_unique<DrawableMaze>(gen);
     std::swap(view_settings, dmaze->view_settings);
   };

@@ -28,6 +28,7 @@ namespace pstl = std;
 namespace stdex = std::experimental;
 
 namespace jt::maze {
+  std::random_device Grid::rd{};
 
 std::vector<int> calculate_variable_widths(int height) {
   auto widths = ranges::views::iota(1, static_cast<int>(height + 1)) |

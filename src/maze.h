@@ -65,17 +65,19 @@ struct GridSettings {
   GridMask mask;
 };
 
-enum class CellShape { Square, Hex, Triange };
+enum class CellShape { Square, Hex, Triange, SquareVarWidth };
 
 struct GridReprCommon {
   GridReprCommon(GridSettings settings) : grid_settings{settings} {
     // FIXME: Fill widths with widths
-    grid_settings.widths =
+    if(grid_settings.widths.size() == 0) {
+      grid_settings.widths =
         std::vector<int>(grid_settings.height, grid_settings.width);
+    }
   };
 
  protected:
-  static constexpr CellShape cs = CellShape::Square;
+  static constexpr CellShape cs = CellShape::SquareVarWidth;
 
   using AdjacentCells = std::array<std::optional<CellCoordinate>, 8>;
   enum class Direction { N, NE, E, SE, S, SW, W, NW };
@@ -142,16 +144,30 @@ struct GridReprCommon {
       };
     }
 #endif
-    // Variable width?
-    // TODO: From book on polar grid
-    // if row > 0
-    //   cell.cw = self[row, col + 1]
-    //   cell.ccw = self[row, col - 1]
-    //   ratio = @grid[row].length / @grid[row - 1].length
-    //   parent = @grid[row - 1][col / ratio]
-    //   parent.outward << cell
-    //   cell.inward = parent
-    // end
+    if constexpr (CellShape::SquareVarWidth == cs) {
+      auto wrapped_cell = [&](const auto &cell, int row_delta, int col_delta) {
+        auto row = (cell.row + row_delta + grid_settings.height) %
+                   grid_settings.height;
+        auto w = grid_settings.widths[row];
+        auto ratio = double(grid_settings.widths[row]) /
+                     double(grid_settings.widths[cell.row]);
+        auto col = (int(ratio * (cell.col + col_delta)) + w) % w;
+        if(ratio != 1.0)
+          fmt::print("cell={}, r={} c={}, ratio={}, row={}, col={}\n", cell,
+                   row_delta, col_delta, ratio, row, col);
+        return CellCoordinate{row, col};
+      };
+      return {
+          wrapped_cell(c, -1, 0),  // N
+          std::nullopt,            // NE
+          wrapped_cell(c, 0, +1),  // E
+          std::nullopt,            // SE
+          wrapped_cell(c, +1, 0),  // S
+          std::nullopt,            // SW
+          wrapped_cell(c, 0, -1),  // W
+          std::nullopt,            // NW
+      };
+    }
   };
 
  public:
@@ -429,7 +445,7 @@ struct DenseGridRepr : GridReprCommon {
     auto neighbors = get_all_neighbors_(c1);
     auto n = ranges::find_if(neighbors, [c2](auto n) { return n && *n == c2; });
     if (n == neighbors.end()) {
-      throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1, c2));
+      // throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1, c2));
       return false;
     }
     return (grid_view_(c1.row, c1.col).walls &
@@ -469,7 +485,7 @@ struct DenseGridRepr : GridReprCommon {
     auto neighbors = get_all_neighbors_(c1);
     auto n = ranges::find_if(neighbors, [c2](auto n) { return n && *n == c2; });
     if (n == neighbors.end()) {
-      throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1, c2));
+      // throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1, c2));
     }
     if (link_or_unlink) {
       grid_view_(c1.row, c1.col).walls &=
@@ -506,14 +522,13 @@ struct Grid : DenseGridRepr {
 
   Grid(GridSettings settings)
       : DenseGridRepr(settings),
-        rd{},
         gen{rd()},
         mask{settings.mask.mask},
         mask_as_mdspan_{mask.data(), grid_settings.height,
                         grid_settings.widths.back()} {};
 
  private:
-  std::random_device rd{};
+  static std::random_device rd;
 
   std::vector<uint8_t> mask{};
   stdex::mdspan<uint8_t,
