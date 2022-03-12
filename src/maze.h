@@ -70,6 +70,7 @@ enum class CellShape { Square, Hex, Triange, SquareVarWidth };
 class Grid {
  public:
   GridSettings grid_settings;
+  std::mt19937 gen;
 
   Grid(int width, int height)
       : Grid(GridSettings{
@@ -80,10 +81,10 @@ class Grid {
 
   Grid(GridSettings settings)
       : grid_settings{settings},
+        gen{rd()},
         grid_{static_cast<size_t>(grid_settings.width * grid_settings.height),
               a_closed_cell},
         grid_view_{grid_.data(), grid_settings.height, grid_settings.width},
-        gen{rd()},
         mask{settings.mask.mask},
         mask_as_mdspan_{mask.data(), grid_settings.height,
                         grid_settings.width} {
@@ -95,11 +96,51 @@ class Grid {
     assert(grid_settings.width == grid_settings.widths.back());
   };
 
- protected:
-  static constexpr CellShape cs = CellShape::SquareVarWidth;
+  struct Cell {
+    union {
+      uint8_t walls;
+      struct {
+        uint8_t n : 1;
+        uint8_t ne : 1;
+        uint8_t e : 1;
+        uint8_t se : 1;
+        uint8_t s : 1;
+        uint8_t sw : 1;
+        uint8_t w : 1;
+        uint8_t nw : 1;
+      };
+    };
+    uint8_t flags = 0;
+    enum class Flags : uint8_t {
+      UnderCell = 1,
+    };
+    void set_flag(Flags f) { flags |= to_underlying(f); }
+    bool check_flag(Flags f) const { return 0 != (to_underlying(f) & flags); }
+  };
+
+ private:
+  static std::random_device rd;
 
   using AdjacentCells = std::array<std::optional<CellCoordinate>, 8>;
+
   enum class Direction { N, NE, E, SE, S, SW, W, NW };
+
+  static constexpr CellShape cs = CellShape::SquareVarWidth;
+
+  static constexpr Cell a_closed_cell{0xff, 0x00};
+  static constexpr Cell a_open_cell{0x00, 0x00};
+
+  std::vector<Cell> grid_;
+  stdex::mdspan<Cell,
+                stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
+      grid_view_;
+
+  std::vector<uint8_t> mask{};
+  stdex::mdspan<uint8_t,
+                stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
+      mask_as_mdspan_;
+
+ private:
   AdjacentCells adjacent_cells(CellCoordinate c) const {
     static_assert(to_underlying(Direction::N) == 0);
     static_assert(to_underlying(Direction::E) == 2);
@@ -401,43 +442,7 @@ class Grid {
            n->col < grid_settings.widths[n->row] - 1;
   }
 
-  // these depend on the grid reprensation
-  // virtual bool is_linked(CellCoordinate c1, CellCoordinate c2) const = 0;
-  // virtual void link(CellCoordinate c1, CellCoordinate c2) = 0;
-  // virtual void unlink(CellCoordinate c1, CellCoordinate c2) = 0;
-  // virtual bool is_under_cell(CellCoordinate c) const = 0;
-
   ////////////////////////////////////////////////////////////////////////////////
-
-  // enum class Direction { N, NE, E, SE, S, SW, W, NW };
-  struct Cell {
-    union {
-      uint8_t walls;
-      struct {
-        uint8_t n : 1;
-        uint8_t ne : 1;
-        uint8_t e : 1;
-        uint8_t se : 1;
-        uint8_t s : 1;
-        uint8_t sw : 1;
-        uint8_t w : 1;
-        uint8_t nw : 1;
-      };
-    };
-    uint8_t flags = 0;
-    enum class Flags : uint8_t {
-      UnderCell = 1,
-    };
-    void set_flag(Flags f) { flags |= to_underlying(f); }
-    bool check_flag(Flags f) const { return 0 != (to_underlying(f) & flags); }
-  };
-  static constexpr Cell a_closed_cell{0xff, 0x00};
-  static constexpr Cell a_open_cell{0x00, 0x00};
-
-  std::vector<Cell> grid_;
-  stdex::mdspan<Cell,
-                stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
-      grid_view_;
 
   auto as_mdspan() const { return grid_view_; }
 
@@ -513,17 +518,6 @@ class Grid {
   void reset() { ranges::fill(grid_, a_closed_cell); }
   void reset_open() { ranges::fill(grid_, a_open_cell); }
 
- private:
-  static std::random_device rd;
-
-  std::vector<uint8_t> mask{};
-  stdex::mdspan<uint8_t,
-                stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
-      mask_as_mdspan_;
-
- public:
-  std::mt19937 gen;
-
   // mask helpers
   auto mask_as_mdspan() const {
     // fixme
@@ -533,28 +527,6 @@ class Grid {
     auto m = mask_as_mdspan();
     return grid_settings.mask.valid_mask && 0 != m(c.row, c.col);
   }
-
-  // Helpers to get individual neighbors
-  // auto connected_cell_north(CellCoordinate c) const {
-  //   auto m = as_mdspan();
-  //   auto n = cell_north(c);
-  //   return n && m(n->row, n->col).down == Wall::Open ? n : std::nullopt;
-  // }
-  // auto connected_cell_east(CellCoordinate c) const {
-  //   auto m = as_mdspan();
-  //   auto e = cell_east(c);
-  //   return e && m(c.row, c.col).right == Wall::Open ? e : std::nullopt;
-  // }
-  // auto connected_cell_south(CellCoordinate c) const {
-  //   auto m = as_mdspan();
-  //   auto s = cell_south(c);
-  //   return s && m(c.row, c.col).down == Wall::Open ? s : std::nullopt;
-  // }
-  // auto connected_cell_west(CellCoordinate c) const {
-  //   auto m = as_mdspan();
-  //   auto w = cell_west(c);
-  //   return w && m(w->row, w->col).right == Wall::Open ? w : std::nullopt;
-  // }
 
   // Generate a random CellCoordinate within the grid
   auto random_cell() {
