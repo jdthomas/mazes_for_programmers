@@ -30,6 +30,13 @@ int main(int argc, char **argv) {
   jt::maze::Grid grid{static_cast<int>(std::strtol(argv[1], nullptr, 10)),
                       static_cast<int>(std::strtol(argv[2], nullptr, 10))};
   std::unordered_map<std::string, float> averages;
+  // - [ ] Extend stats to output:
+  // -  [x] Number of dead ends
+  // -  [ ] Length of longest path (the number of cells it contains)
+  // -  [ ] Number of cells with horizontal or vertical passages (east-to-west, and north-to-south)
+  // -  [ ] Number of “elbow” cells (passage enters from one side, then turns either right or left)
+  // -  [ ] Number of three-way intersections
+  // -  [ ] Number of four-way intersections
   jt::maze::ensure_registry();
   // we run stats instead!
   for (auto &m : jt::maze::GeneratorRegistry::AllMethods()) {

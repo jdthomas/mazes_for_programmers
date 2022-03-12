@@ -67,13 +67,32 @@ struct GridSettings {
 
 enum class CellShape { Square, Hex, Triange, SquareVarWidth };
 
-struct GridReprCommon {
-  GridReprCommon(GridSettings settings) : grid_settings{settings} {
+class Grid {
+ public:
+  GridSettings grid_settings;
+
+  Grid(int width, int height)
+      : Grid(GridSettings{
+            .width = width,
+            .height = height,
+            .mask = GridMask{.mask = std::vector<uint8_t>(width * height)},
+        }){};
+
+  Grid(GridSettings settings)
+      : grid_settings{settings},
+        grid_{static_cast<size_t>(grid_settings.width * grid_settings.height),
+              a_closed_cell},
+        grid_view_{grid_.data(), grid_settings.height, grid_settings.width},
+        gen{rd()},
+        mask{settings.mask.mask},
+        mask_as_mdspan_{mask.data(), grid_settings.height,
+                        grid_settings.width} {
     // FIXME: Fill widths with widths
-    if(grid_settings.widths.size() == 0) {
+    if (grid_settings.widths.size() == 0) {
       grid_settings.widths =
-        std::vector<int>(grid_settings.height, grid_settings.width);
+          std::vector<int>(grid_settings.height, grid_settings.width);
     }
+    assert(grid_settings.width == grid_settings.widths.back());
   };
 
  protected:
@@ -152,9 +171,9 @@ struct GridReprCommon {
         auto ratio = double(grid_settings.widths[row]) /
                      double(grid_settings.widths[cell.row]);
         auto col = (int(ratio * (cell.col + col_delta)) + w) % w;
-        if(ratio != 1.0)
+        if (ratio != 1.0)
           fmt::print("cell={}, r={} c={}, ratio={}, row={}, col={}\n", cell,
-                   row_delta, col_delta, ratio, row, col);
+                     row_delta, col_delta, ratio, row, col);
         return CellCoordinate{row, col};
       };
       return {
@@ -171,8 +190,6 @@ struct GridReprCommon {
   };
 
  public:
-  GridSettings grid_settings;
-
   // Helper to generate all CellCoordinate for each cell
   auto positions() const {
     return ranges::views::cartesian_product(
@@ -385,30 +402,13 @@ struct GridReprCommon {
   }
 
   // these depend on the grid reprensation
-  virtual bool is_linked(CellCoordinate c1, CellCoordinate c2) const = 0;
-  virtual void link(CellCoordinate c1, CellCoordinate c2) = 0;
-  virtual void unlink(CellCoordinate c1, CellCoordinate c2) = 0;
-  virtual bool is_under_cell(CellCoordinate c) const = 0;
-};
+  // virtual bool is_linked(CellCoordinate c1, CellCoordinate c2) const = 0;
+  // virtual void link(CellCoordinate c1, CellCoordinate c2) = 0;
+  // virtual void unlink(CellCoordinate c1, CellCoordinate c2) = 0;
+  // virtual bool is_under_cell(CellCoordinate c) const = 0;
 
-struct SparceGridRepr : GridReprCommon {
-  struct Cell {
-    std::vector<CellCoordinate> linked_neighbors;
-  };
+  ////////////////////////////////////////////////////////////////////////////////
 
-  std::vector<Cell> grid_;
-  stdex::mdspan<Cell,
-                stdex::extents<stdex::dynamic_extent, stdex::dynamic_extent>>
-      grid_view_;
-};
-
-struct DenseGridRepr : GridReprCommon {
-  DenseGridRepr(GridSettings settings)
-      : GridReprCommon(settings),
-        grid_{static_cast<size_t>(grid_settings.width * grid_settings.height),
-              a_closed_cell},
-        grid_view_{grid_.data(), grid_settings.height,
-                   grid_settings.widths.back()} {};
   // enum class Direction { N, NE, E, SE, S, SW, W, NW };
   struct Cell {
     union {
@@ -441,23 +441,24 @@ struct DenseGridRepr : GridReprCommon {
 
   auto as_mdspan() const { return grid_view_; }
 
-  bool is_linked(CellCoordinate c1, CellCoordinate c2) const override {
+  bool is_linked(CellCoordinate c1, CellCoordinate c2) const {
     auto neighbors = get_all_neighbors_(c1);
     auto n = ranges::find_if(neighbors, [c2](auto n) { return n && *n == c2; });
     if (n == neighbors.end()) {
-      // throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1, c2));
+      // throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1,
+      // c2));
       return false;
     }
     return (grid_view_(c1.row, c1.col).walls &
             (1 << ranges::distance(neighbors.begin(), n))) == 0;
   }
 
-  void unlink(CellCoordinate c1, CellCoordinate c2) override {
+  void unlink(CellCoordinate c1, CellCoordinate c2) {
     link_(c1, c2, false);
     link_(c2, c1, false);
   }
   // Helper for linking two cells togetherr (must be neighbors)
-  void link(CellCoordinate c1, CellCoordinate c2) override {
+  void link(CellCoordinate c1, CellCoordinate c2) {
     // Weaving:
     // Check if we are a neighbor-neighbor
     if (grid_settings.enable_weaving && (std::abs(c1.row - c2.row) == 2) ||
@@ -485,7 +486,8 @@ struct DenseGridRepr : GridReprCommon {
     auto neighbors = get_all_neighbors_(c1);
     auto n = ranges::find_if(neighbors, [c2](auto n) { return n && *n == c2; });
     if (n == neighbors.end()) {
-      // throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1, c2));
+      // throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1,
+      // c2));
     }
     if (link_or_unlink) {
       grid_view_(c1.row, c1.col).walls &=
@@ -496,7 +498,7 @@ struct DenseGridRepr : GridReprCommon {
     }
   }
 
-  bool is_under_cell(CellCoordinate c) const override {
+  bool is_under_cell(CellCoordinate c) const {
     auto m = as_mdspan();
     return m(c.row, c.col).check_flag(Cell::Flags::UnderCell);
   }
@@ -510,22 +512,6 @@ struct DenseGridRepr : GridReprCommon {
   // Reset grid to all solid walls
   void reset() { ranges::fill(grid_, a_closed_cell); }
   void reset_open() { ranges::fill(grid_, a_open_cell); }
-};
-
-struct Grid : DenseGridRepr {
-  Grid(int width, int height)
-      : Grid(GridSettings{
-            .width = width,
-            .height = height,
-            .mask = GridMask{.mask = std::vector<uint8_t>(width * height)},
-        }){};
-
-  Grid(GridSettings settings)
-      : DenseGridRepr(settings),
-        gen{rd()},
-        mask{settings.mask.mask},
-        mask_as_mdspan_{mask.data(), grid_settings.height,
-                        grid_settings.widths.back()} {};
 
  private:
   static std::random_device rd;
