@@ -63,6 +63,7 @@ struct GridSettings {
   bool enable_weaving = true;
   std::vector<int> widths;
   GridMask mask;
+  int random_seed = 0;  // 0 for random_device feed
 };
 
 enum class CellShape { Square, Hex, Triange, SquareVarWidth };
@@ -81,7 +82,7 @@ class Grid {
 
   Grid(GridSettings settings)
       : grid_settings{settings},
-        gen{rd()},
+        gen{grid_settings.random_seed == 0 ? rd() : grid_settings.random_seed},
         grid_{static_cast<size_t>(grid_settings.width * grid_settings.height),
               a_closed_cell},
         grid_view_{grid_.data(), grid_settings.height, grid_settings.width},

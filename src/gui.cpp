@@ -1030,6 +1030,7 @@ void gui_main(DrawableMaze::GenerationSettings gen) {
                          "ratio = %.3f");
       ImGui::SliderInt("Height", &gen.grid_settings.height, 4, 200);
       ImGui::SliderInt("Width", &gen.grid_settings.width, 4, 200);
+      ImGui::SliderInt("Random Seed (0 for random)", &gen.grid_settings.random_seed, 0, std::numeric_limits<int>::max());
 
       ImGui::EndGroup();
 
