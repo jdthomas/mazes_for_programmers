@@ -127,6 +127,9 @@ class Grid {
   enum class Direction { N, NE, E, SE, S, SW, W, NW };
 
   static constexpr CellShape cs = CellShape::SquareVarWidth;
+  static constexpr bool cell_shape_is_square() {
+    return cs == CellShape::SquareVarWidth || cs == CellShape::Square;
+  }
 
   static constexpr Cell a_closed_cell{0xff, 0x00};
   static constexpr Cell a_open_cell{0x00, 0x00};
@@ -150,7 +153,7 @@ class Grid {
     const auto h = grid_settings.height;
     const auto w = grid_settings.widths[c.row];
     // Square
-    if constexpr (CellShape::Square == cs) {
+    if constexpr (cs == CellShape::Square) {
       return {
           CellCoordinate{(c.row - 1 + h) % h, (c.col + 0 + w) % w},  // N
           std::nullopt,                                              // NE
@@ -258,7 +261,7 @@ class Grid {
   }
 
   auto cell_north_west(CellCoordinate c) const {
-    if constexpr (cs == CellShape::Square) {
+    if constexpr (cell_shape_is_square()) {
       const bool even_col = c.col % 2 == 0;
       return even_col ? std::nullopt
                       : get_all_neighbors_(c)[to_underlying(Direction::W)];
@@ -268,7 +271,7 @@ class Grid {
   }
 
   auto cell_north_east(CellCoordinate c) const {
-    if constexpr (cs == CellShape::Square) {
+    if constexpr (cell_shape_is_square()) {
       const bool even_col = c.col % 2 == 0;
       return even_col ? std::nullopt
                       : get_all_neighbors_(c)[to_underlying(Direction::E)];
@@ -278,7 +281,7 @@ class Grid {
   }
 
   auto cell_south_west(CellCoordinate c) const {
-    if constexpr (cs == CellShape::Square) {
+    if constexpr (cell_shape_is_square()) {
       const bool even_col = c.col % 2 == 0;
       return !even_col ? std::nullopt
                        : get_all_neighbors_(c)[to_underlying(Direction::W)];
@@ -288,7 +291,7 @@ class Grid {
   }
 
   auto cell_south_east(CellCoordinate c) const {
-    if constexpr (cs == CellShape::Square) {
+    if constexpr (cell_shape_is_square()) {
       const bool even_col = c.col % 2 == 0;
       return !even_col ? std::nullopt
                        : get_all_neighbors_(c)[to_underlying(Direction::E)];
