@@ -274,9 +274,6 @@ auto hex_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
   std::vector<CellCorner> fill_poly;
 
   if (!dmaze.view_settings.show_inset) {
-    // Fixme: These are not correct since currently I do not have real hex
-    // mazes. To demo this code, just open whole eastt/west based on a square
-    // maze.
     if (!dmaze.grid.connected_cell_north(cell)) {
       segments.emplace_back(x_near_west, y_north, x_near_east, y_north);
     }
@@ -785,7 +782,7 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
     return cell_height * (row + 1);
   };
   const auto cell_to_draw_y = [&](const auto row, const auto col) {
-    // const float cw = 800.0 / (dmaze.grid.grid_settings.widths[row]);
+    // const float cw = 800.0 / (dmaze.grid.grid_settings.widths[row] + 2);
     const float cw = cell_width;
     return cw * (col + 1);
   };

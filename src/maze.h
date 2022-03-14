@@ -126,7 +126,7 @@ class Grid {
 
   enum class Direction { N, NE, E, SE, S, SW, W, NW };
 
-  static constexpr CellShape cs = CellShape::SquareVarWidth;
+  static constexpr CellShape cs = CellShape::Square;
   static constexpr bool cell_shape_is_square() {
     return cs == CellShape::SquareVarWidth || cs == CellShape::Square;
   }
@@ -215,10 +215,12 @@ class Grid {
         auto w = grid_settings.widths[row];
         auto ratio = double(grid_settings.widths[row]) /
                      double(grid_settings.widths[cell.row]);
-        auto col = (int(ratio * (cell.col + col_delta)) + w) % w;
+        auto col = (int(std::round(ratio * cell.col)) + col_delta + w) % w;
         if (ratio != 1.0)
-          fmt::print("cell={}, r={} c={}, ratio={}, row={}, col={}\n", cell,
-                     row_delta, col_delta, ratio, row, col);
+          fmt::print("cell={} -> [{},{}], r={} c={}, ratio={} ({}/{})\n", cell,
+                     row, col, row_delta, col_delta, ratio,
+                     double(grid_settings.widths[row]),
+                     double(grid_settings.widths[cell.row]));
         return CellCoordinate{row, col};
       };
       return {
