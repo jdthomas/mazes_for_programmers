@@ -41,6 +41,23 @@ using namespace jt::maze;
 ////////////////////////////////////////////////////////////////////////////////
 // GUI output
 ////////////////////////////////////////////////////////////////////////////////
+namespace {
+struct GUIViewSettings {
+  sf::Color edge_color = sf::Color::Green;
+  sf::Color end_marker_color = sf::Color::Magenta;
+  sf::Color begin_marker_color = sf::Color::Cyan;
+  sf::Color player_path_color = sf::Color::Cyan;
+  sf::Color solution_path_color = sf::Color::Red;
+  sf::Color bg_color = sf::Color::Black;
+  sf::Color text_color = sf::Color::Yellow;
+  sf::Color under_cell_color = sf::Color(37, 69, 69);
+  sf::Color cell_color = sf::Color(47, 79, 79);
+};
+const GUIViewSettings &gui_view_settings() {
+  static const GUIViewSettings gui_view_settings_{};
+  return gui_view_settings_;
+}
+}  // namespace
 
 struct DrawableMaze {
   struct GenerationSettings {
@@ -161,7 +178,7 @@ struct DrawableMaze {
 auto draw_path = [](const Grid &grid, sf::RenderWindow &window,
                     const std::vector<CellCoordinate> &path,
                     const auto center_of_cell,
-                    const sf::Color line_color = sf::Color::Red) -> void {
+                    const sf::Color path_color = sf::Color::Red) -> void {
   if (path.empty()) return;
 
   auto x = ranges::adjacent_find(
@@ -171,13 +188,12 @@ auto draw_path = [](const Grid &grid, sf::RenderWindow &window,
         window.draw(l, 2, sf::Lines);
         return false;
       },
-      [center_of_cell, line_color, &grid](auto pos) {
+      [center_of_cell, path_color, &grid](auto pos) {
         auto &[row, col] = pos;
         assert(row < grid.grid_settings.height &&
                col < grid.grid_settings.widths.back());
-        const auto &[draw_pos_first, draw_pos_second] = center_of_cell(pos);
-        return sf::Vertex(sf::Vector2f(draw_pos_first, draw_pos_second),
-                          line_color);
+        const auto &[draw_pos_y, draw_pos_x] = center_of_cell(pos);
+        return sf::Vertex(sf::Vector2f(draw_pos_y, draw_pos_x), path_color);
       });
 };
 
@@ -612,7 +628,6 @@ auto square_cell_to_segment_coords = [](const auto &cell, const auto &dmaze) {
 auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
                            auto cell_polygon, auto center_of_cell,
                            auto cell_width, auto cell_height) -> void {
-  const auto line_color = sf::Color::Green;
   if (dmaze.view_settings.show_solution) {
     for (const auto &cell : dmaze.grid.positions()) {
       auto corners = cell_polygon(cell);
@@ -633,9 +648,10 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
       sf::ConvexShape polygon;
       if (dmaze.grid(cell).check_flag(Grid::Cell::Flags::UnderCell)) {
         // polygon.setFillColor(sf::Color(sf::Color::Red));  // dark gray
-        polygon.setFillColor(sf::Color(37, 69, 69));  // dark gray
+        polygon.setFillColor(
+            gui_view_settings().under_cell_color);  // dark gray
       } else {
-        polygon.setFillColor(sf::Color(47, 79, 79));  // dark gray
+        polygon.setFillColor(gui_view_settings().cell_color);  // dark gray
       }
 
       polygon.setPointCount(corners.fill_poly.size());
@@ -651,10 +667,11 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
   for (const auto &cell : dmaze.grid.positions()) {
     auto corners = cell_polygon(cell);
     for (const auto &seg : corners.segments) {
-      sf::Vertex line[] = {
-          sf::Vertex(sf::Vector2f(seg.a.x, seg.a.y), line_color),
-          sf::Vertex(sf::Vector2f(seg.b.x, seg.b.y), line_color)};
-
+      sf::Vertex line[] = {sf::Vertex(sf::Vector2f(seg.a.x, seg.a.y),
+                                      gui_view_settings().edge_color),
+                           sf::Vertex(sf::Vector2f(seg.b.x, seg.b.y),
+                                      gui_view_settings().edge_color)};
+      assert(gui_view_settings().edge_color == sf::Color::Green);
       window.draw(line, 2, sf::Lines);
     }
   }
@@ -665,7 +682,7 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
     auto cent = center_of_cell(cell);
     draw_circle_centered(window, {cent.x, cent.y},
                          .8 * std::min(cell_width, cell_height) / 2,
-                         sf::Color::Cyan);
+                         gui_view_settings().begin_marker_color);
   }
   {
     auto cell = dmaze.path.back();
@@ -673,14 +690,15 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
     auto cent = center_of_cell(cell);
     draw_circle_centered(window, {cent.x, cent.y},
                          .8 * std::min(cell_width, cell_height) / 2,
-                         sf::Color::Magenta);
+                         gui_view_settings().end_marker_color);
   }
 
   if (dmaze.view_settings.show_solution) {
-    draw_path(dmaze.grid, window, dmaze.path, center_of_cell);
+    draw_path(dmaze.grid, window, dmaze.path, center_of_cell,
+              gui_view_settings().solution_path_color);
   }
   draw_path(dmaze.grid, window, dmaze.player_path, center_of_cell,
-            sf::Color::Cyan);
+            gui_view_settings().player_path_color);
 
   // Labels
   static sf::Font font;
@@ -695,7 +713,7 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
     text.setFont(font);
     text.setString(dmaze.method_name);
     text.setCharacterSize(22);  // in pixels, not points!
-    text.setFillColor(sf::Color::Yellow);
+    text.setFillColor(gui_view_settings().text_color);
     window.draw(text);
   }
 
@@ -704,7 +722,7 @@ auto draw_maze_common = [](sf::RenderWindow &window, const DrawableMaze &dmaze,
     text.setFont(font);
     text.setString("WINNER");
     text.setCharacterSize(44);  // in pixels, not points!
-    text.setFillColor(sf::Color::Yellow);
+    text.setFillColor(gui_view_settings().text_color);
     sf::FloatRect textRect = text.getLocalBounds();
     text.setOrigin(textRect.left + textRect.width / 2.0f,
                    textRect.top + textRect.height / 2.0f);
@@ -719,7 +737,6 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
       800.0 / (2 * dmaze.grid.grid_settings.height + 2);  // yes use height
   const float cell_height = 600.0 / (2 * dmaze.grid.grid_settings.height + 2);
   const auto cell_size = std::min(cell_width, cell_height);
-  const auto line_color = sf::Color::Green;
   const auto center_x = 400;
   const auto center_y = 300;
   constexpr double pi = M_PI;
@@ -785,8 +802,8 @@ void draw_polar_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   {
     auto rad = cell_size * (dmaze.grid.grid_settings.height);
     sf::CircleShape shape(rad);
-    shape.setFillColor(sf::Color::Black);
-    shape.setOutlineColor(line_color);
+    shape.setFillColor(gui_view_settings().bg_color);
+    shape.setOutlineColor(gui_view_settings().edge_color);
     shape.setOutlineThickness(1);
     shape.setPosition(center_x - rad, center_y - rad);
     window.draw(shape);
@@ -800,7 +817,6 @@ void draw_maze(sf::RenderWindow &window, const DrawableMaze &dmaze) {
   auto window_size = window.getSize();
   const float cell_width = 800.0 / (dmaze.grid.grid_settings.widths.back() + 2);
   const float cell_height = 600.0 / (dmaze.grid.grid_settings.height + 2);
-  const auto line_color = sf::Color::Green;
 
   const auto cell_to_draw_x = [&](const auto row,
                                   [[maybe_unused]] const auto col) {
@@ -892,7 +908,8 @@ void gui_main(DrawableMaze::GenerationSettings gen) {
         case sf::Event::TextEntered:
           switch (event.text.unicode) {
             case '-':
-              gen.grid_settings.width = std::max(1,gen.grid_settings.width-1);
+              gen.grid_settings.width =
+                  std::max(1, gen.grid_settings.width - 1);
               need_regen = true;
               break;
             case '+':
@@ -900,7 +917,8 @@ void gui_main(DrawableMaze::GenerationSettings gen) {
               need_regen = true;
               break;
             case '[':
-              gen.grid_settings.height = std::max(1,gen.grid_settings.height-1);
+              gen.grid_settings.height =
+                  std::max(1, gen.grid_settings.height - 1);
               need_regen = true;
               break;
             case ']':
@@ -1051,7 +1069,7 @@ void gui_main(DrawableMaze::GenerationSettings gen) {
     if (need_regen) regen_maze();
 
     // clear the window with black color
-    window.clear(sf::Color::Black);
+    window.clear(gui_view_settings().bg_color);
 
     // draw everything here...
     if (dmaze->view_settings.polar_maze) {
