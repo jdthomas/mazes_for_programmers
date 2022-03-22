@@ -104,8 +104,8 @@ void sidewinder_maze(Grid &grid) {
   std::for_each(r.begin(), r.end(), [&grid, &d](const auto &row) {
     int run_start = 0;
     for (int col = 0; col < grid.grid_settings.widths.back(); col++) {
-      auto e = grid.cell_east({row, col});
-      auto s = grid.cell_south({row, col});
+      auto e = grid.cell_east(CellCoordinate{row, col});
+      auto s = grid.cell_south(CellCoordinate{row, col});
       bool should_close = !e || (s && d(grid.gen));
       if (should_close) {
         std::uniform_int_distribution<> distrib(run_start, col);
@@ -135,8 +135,8 @@ void sidewinder_maze_p(Grid &grid) {
                   int run_start = 0;
                   for (int col = 0; col < grid.grid_settings.widths.back();
                        col++) {
-                    auto e = grid.cell_east({row, col});
-                    auto s = grid.cell_south({row, col});
+                    auto e = grid.cell_east(CellCoordinate{row, col});
+                    auto s = grid.cell_south(CellCoordinate{row, col});
                     bool should_close = !e || (s && d(grid.gen));
                     if (should_close) {
                       std::uniform_int_distribution<> distrib(run_start, col);
@@ -222,7 +222,7 @@ void random_walk_Wilson_maze(Grid &grid) {
 GeneratorRegistry::RegisterGenerator w('W', "Wilson", random_walk_Wilson_maze);
 
 void hunt_and_kill_maze(Grid &grid) {
-  std::optional<CellCoordinate> current = grid.random_cell();
+  MaybeCellCoordinate current = grid.random_cell();
 
   while (current) {
     auto n = grid.random_closed_neighbor(*current);

@@ -199,140 +199,136 @@ void braid_maze(Grid &grid, float p) {
   }
 }
 
-bool Grid::is_crossing_undercell(CellCoordinate over,
-                                 CellCoordinate under) const {
-  return is_under_cell(under) && is_linked(over, under) &&
+bool Grid::is_crossing_undercell(MaybeCellCoordinate over,
+                                 MaybeCellCoordinate under) const {
+  return over && under && is_under_cell(under) && is_linked(over, under) &&
          !is_linked(under, over);
 }
 
 // Helpers to get neighboring CellCoordinate for each direction
-std::optional<CellCoordinate> Grid::cell_north(CellCoordinate c) const {
-  return get_all_neighbors_(c)[to_underlying(Direction::N)];
+MaybeCellCoordinate Grid::cell_north(MaybeCellCoordinate c) const {
+  return cell_by_direction(c, Direction::N);
 }
-std::optional<CellCoordinate> Grid::cell_east(CellCoordinate c) const {
-  return get_all_neighbors_(c)[to_underlying(Direction::E)];
+MaybeCellCoordinate Grid::cell_east(MaybeCellCoordinate c) const {
+  return cell_by_direction(c, Direction::E);
 }
-std::optional<CellCoordinate> Grid::cell_south(CellCoordinate c) const {
-  return get_all_neighbors_(c)[to_underlying(Direction::S)];
+MaybeCellCoordinate Grid::cell_south(MaybeCellCoordinate c) const {
+  return cell_by_direction(c, Direction::S);
 }
-std::optional<CellCoordinate> Grid::cell_west(CellCoordinate c) const {
-  return get_all_neighbors_(c)[to_underlying(Direction::W)];
+MaybeCellCoordinate Grid::cell_west(MaybeCellCoordinate c) const {
+  return cell_by_direction(c, Direction::W);
 }
 
-std::optional<CellCoordinate> Grid::cell_north_west(CellCoordinate c) const {
+MaybeCellCoordinate Grid::cell_north_west(MaybeCellCoordinate c) const {
+  if (!c) return std::nullopt;
   if constexpr (cell_shape_is_square()) {
-    const bool even_col = c.col % 2 == 0;
-    return even_col ? std::nullopt
-                    : get_all_neighbors_(c)[to_underlying(Direction::W)];
+    const bool even_col = c->col % 2 == 0;
+    return even_col ? std::nullopt : cell_by_direction(c, Direction::W);
   } else {
-    return get_all_neighbors_(c)[to_underlying(Direction::NW)];
+    return cell_by_direction(c, Direction::NW);
   }
 }
 
-std::optional<CellCoordinate> Grid::cell_north_east(CellCoordinate c) const {
+MaybeCellCoordinate Grid::cell_north_east(MaybeCellCoordinate c) const {
+  if (!c) return std::nullopt;
   if constexpr (cell_shape_is_square()) {
-    const bool even_col = c.col % 2 == 0;
-    return even_col ? std::nullopt
-                    : get_all_neighbors_(c)[to_underlying(Direction::E)];
+    const bool even_col = c->col % 2 == 0;
+    return even_col ? std::nullopt : cell_by_direction(c, Direction::E);
   } else {
-    return get_all_neighbors_(c)[to_underlying(Direction::NE)];
+    return cell_by_direction(c, Direction::NE);
   }
 }
 
-std::optional<CellCoordinate> Grid::cell_south_west(CellCoordinate c) const {
+MaybeCellCoordinate Grid::cell_south_west(MaybeCellCoordinate c) const {
+  if (!c) return std::nullopt;
   if constexpr (cell_shape_is_square()) {
-    const bool even_col = c.col % 2 == 0;
-    return !even_col ? std::nullopt
-                     : get_all_neighbors_(c)[to_underlying(Direction::W)];
+    const bool even_col = c->col % 2 == 0;
+    return !even_col ? std::nullopt : cell_by_direction(c, Direction::W);
   } else {
-    return get_all_neighbors_(c)[to_underlying(Direction::SW)];
+    return cell_by_direction(c, Direction::SW);
   }
 }
 
-std::optional<CellCoordinate> Grid::cell_south_east(CellCoordinate c) const {
+MaybeCellCoordinate Grid::cell_south_east(MaybeCellCoordinate c) const {
+  if (!c) return std::nullopt;
   if constexpr (cell_shape_is_square()) {
-    const bool even_col = c.col % 2 == 0;
-    return !even_col ? std::nullopt
-                     : get_all_neighbors_(c)[to_underlying(Direction::E)];
+    const bool even_col = c->col % 2 == 0;
+    return !even_col ? std::nullopt : cell_by_direction(c, Direction::E);
   } else {
-    return get_all_neighbors_(c)[to_underlying(Direction::SE)];
+    return cell_by_direction(c, Direction::SE);
   }
 }
 
-bool Grid::is_connected_directly_north(CellCoordinate c) const {
+bool Grid::is_connected_directly_north(MaybeCellCoordinate c) const {
   auto n = cell_north(c);
-  return n && is_linked(c, *n);
+  return is_linked(c, n);
 }
-bool Grid::is_connected_directly_west(CellCoordinate c) const {
+bool Grid::is_connected_directly_west(MaybeCellCoordinate c) const {
   auto n = cell_west(c);
-  return n && is_linked(c, *n);
+  return is_linked(c, n);
 }
-bool Grid::is_connected_directly_south(CellCoordinate c) const {
+bool Grid::is_connected_directly_south(MaybeCellCoordinate c) const {
   auto n = cell_south(c);
-  return n && is_linked(c, *n);
+  return is_linked(c, n);
 }
-bool Grid::is_connected_directly_east(CellCoordinate c) const {
+bool Grid::is_connected_directly_east(MaybeCellCoordinate c) const {
   auto n = cell_east(c);
-  return n && is_linked(c, *n);
+  return is_linked(c, n);
 }
 
 //
-std::optional<CellCoordinate> Grid::connected_cell_north(
-    CellCoordinate c) const {
+MaybeCellCoordinate Grid::connected_cell_north(MaybeCellCoordinate c) const {
   auto n = cell_north(c);
-  if (grid_settings.enable_weaving && n && is_crossing_undercell(c, *n))
-    return cell_north(*n);
-  return n && is_linked(c, *n) ? n : std::nullopt;
+  if (grid_settings.enable_weaving && n && is_crossing_undercell(c, n))
+    return cell_north(n);
+  return is_linked(c, n) ? n : std::nullopt;
 }
-std::optional<CellCoordinate> Grid::connected_cell_east(
-    CellCoordinate c) const {
+MaybeCellCoordinate Grid::connected_cell_east(MaybeCellCoordinate c) const {
   auto n = cell_east(c);
-  if (grid_settings.enable_weaving && n && is_crossing_undercell(c, *n))
-    return cell_east(*n);
-  return n && is_linked(c, *n) ? n : std::nullopt;
+  if (grid_settings.enable_weaving && n && is_crossing_undercell(c, n))
+    return cell_east(n);
+  return is_linked(c, n) ? n : std::nullopt;
 }
-std::optional<CellCoordinate> Grid::connected_cell_south(
-    CellCoordinate c) const {
+MaybeCellCoordinate Grid::connected_cell_south(MaybeCellCoordinate c) const {
   auto n = cell_south(c);
-  if (grid_settings.enable_weaving && n && is_crossing_undercell(c, *n))
-    return cell_south(*n);
-  return n && is_linked(c, *n) ? n : std::nullopt;
+  if (grid_settings.enable_weaving && n && is_crossing_undercell(c, n))
+    return cell_south(n);
+  return is_linked(c, n) ? n : std::nullopt;
 }
-std::optional<CellCoordinate> Grid::connected_cell_west(
-    CellCoordinate c) const {
+MaybeCellCoordinate Grid::connected_cell_west(MaybeCellCoordinate c) const {
   auto n = cell_west(c);
-  if (grid_settings.enable_weaving && n && is_crossing_undercell(c, *n))
-    return cell_west(*n);
-  return n && is_linked(c, *n) ? n : std::nullopt;
+  if (grid_settings.enable_weaving && n && is_crossing_undercell(c, n))
+    return cell_west(n);
+  return is_linked(c, n) ? n : std::nullopt;
 }
 
-std::optional<CellCoordinate> Grid::connected_cell_north_west(
-    CellCoordinate c) const {
+MaybeCellCoordinate Grid::connected_cell_north_west(
+    MaybeCellCoordinate c) const {
   auto n = cell_north_west(c);
-  return n && is_linked(c, *n) ? n : std::nullopt;
+  return is_linked(c, n) ? n : std::nullopt;
 }
-std::optional<CellCoordinate> Grid::connected_cell_south_west(
-    CellCoordinate c) const {
+MaybeCellCoordinate Grid::connected_cell_south_west(
+    MaybeCellCoordinate c) const {
   auto n = cell_south_west(c);
-  return n && is_linked(c, *n) ? n : std::nullopt;
+  return is_linked(c, n) ? n : std::nullopt;
 }
-std::optional<CellCoordinate> Grid::connected_cell_north_east(
-    CellCoordinate c) const {
+MaybeCellCoordinate Grid::connected_cell_north_east(
+    MaybeCellCoordinate c) const {
   auto n = cell_north_east(c);
-  return n && is_linked(c, *n) ? n : std::nullopt;
+  return is_linked(c, n) ? n : std::nullopt;
 }
-std::optional<CellCoordinate> Grid::connected_cell_south_east(
-    CellCoordinate c) const {
+MaybeCellCoordinate Grid::connected_cell_south_east(
+    MaybeCellCoordinate c) const {
   auto n = cell_south_east(c);
-  return n && is_linked(c, *n) ? n : std::nullopt;
+  return is_linked(c, n) ? n : std::nullopt;
 }
 
 // Helpers for getting all neighbors
 Grid::AdjacentCells Grid::get_all_neighbors_(CellCoordinate c) const {
   auto neighbors = adjacent_cells(c);
   // Fixup for wrapping (never wrap N/S, optionally wrap E/W)
-  neighbors |= ranges::actions::transform(
-      [this, c](auto n) -> std::optional<CellCoordinate> {
+  neighbors |=
+      ranges::actions::transform([this, c](auto n) -> MaybeCellCoordinate {
         return !n || (std::abs(c.row - n->row) > 1) ||
                        (std::abs(c.col - n->col) > 1 &&
                         !grid_settings.allow_ew_wrap)
@@ -341,7 +337,7 @@ Grid::AdjacentCells Grid::get_all_neighbors_(CellCoordinate c) const {
       });
   // FIXME: filter for masking
   // neighbors |= ranges::actions::transform(
-  //     [this, c](auto n) -> std::optional<CellCoordinate> {
+  //     [this, c](auto n) -> MaybeCellCoordinate {
   //       return !n || masked_at(n) ? std::nullopt : n;
   //     });
   return neighbors;
@@ -351,7 +347,7 @@ Grid::AdjacentCells Grid::get_all_neighbors_(CellCoordinate c) const {
 Grid::AdjacentCells Grid::get_unconnected_neighbors_(CellCoordinate c) {
   auto neighbors = get_all_neighbors_(c);
   neighbors |= ranges::actions::transform([this, &c](const auto &c2) {
-    return c2 && !is_linked(c, *c2) ? c2 : std::nullopt;
+    return !is_linked(c, c2) ? c2 : std::nullopt;
   });
   return neighbors;
 }
@@ -360,66 +356,68 @@ Grid::AdjacentCells Grid::get_unconnected_neighbors_(CellCoordinate c) {
 Grid::AdjacentCells Grid::get_connected_neighbors_(CellCoordinate c) const {
   auto neighbors = get_all_neighbors_(c);
   neighbors |= ranges::actions::transform(
-      [this, c](auto n) { return n && is_linked(c, *n) ? n : std::nullopt; });
+      [this, c](auto n) { return is_linked(c, n) ? n : std::nullopt; });
   return neighbors;
 }
 
-size_t Grid::count_connected_neighbors(const CellCoordinate c) const {
-  auto tmp = get_connected_neighbors_(c);
+size_t Grid::count_connected_neighbors(const MaybeCellCoordinate c) const {
+  if (!c) return 0;
+  auto tmp = get_connected_neighbors_(*c);
   return ranges::distance(
       tmp | ranges::views::filter([](auto n) { return bool(n); }));
 };
 
 // Helper to check if a cell has no connections
-bool Grid::is_closed_cell(CellCoordinate c) const {
+bool Grid::is_closed_cell(MaybeCellCoordinate c) const {
   return count_connected_neighbors(c) == 0;
 }
 
 // Helper to check if a cell is a dead end (has only one connecttion)
-bool Grid::is_dead_end_cell(CellCoordinate c) const {
+bool Grid::is_dead_end_cell(MaybeCellCoordinate c) const {
   return count_connected_neighbors(c) == 1;
 }
 
-bool Grid::is_h_passage_cell(CellCoordinate c) const {
+bool Grid::is_h_passage_cell(MaybeCellCoordinate c) const {
   return !connected_cell_north(c) && !connected_cell_south(c) &&
          connected_cell_east(c) && connected_cell_west(c);
 }
-bool Grid::is_v_passage_cell(CellCoordinate c) const {
+bool Grid::is_v_passage_cell(MaybeCellCoordinate c) const {
   return connected_cell_north(c) && connected_cell_south(c) &&
          !connected_cell_east(c) && !connected_cell_west(c);
 }
 
-bool Grid::can_tunnel_north(CellCoordinate c) const {
+bool Grid::can_tunnel_north(MaybeCellCoordinate c) const {
   auto n = cell_north(c);
-  return n && cell_north(*n) && !is_under_cell(*n) && is_h_passage_cell(*n);
+  return cell_north(n) && !is_under_cell(n) && is_h_passage_cell(n);
 }
-bool Grid::can_tunnel_south(CellCoordinate c) const {
+bool Grid::can_tunnel_south(MaybeCellCoordinate c) const {
   auto n = cell_south(c);
-  return n && cell_south(*n) && !is_under_cell(*n) && is_h_passage_cell(*n);
+  return cell_south(n) && !is_under_cell(n) && is_h_passage_cell(n);
 }
-bool Grid::can_tunnel_west(CellCoordinate c) const {
+bool Grid::can_tunnel_west(MaybeCellCoordinate c) const {
   auto n = cell_west(c);
-  return n && cell_west(*n) && !is_under_cell(*n) && is_v_passage_cell(*n) &&
-         c.col > 0 && n->col > 0;
+  return cell_west(n) && !is_under_cell(n) && is_v_passage_cell(n) &&
+         c->col > 0 && n->col > 0;
 }
-bool Grid::can_tunnel_east(CellCoordinate c) const {
+bool Grid::can_tunnel_east(MaybeCellCoordinate c) const {
   auto n = cell_east(c);
-  return n && cell_east(*n) && !is_under_cell(*n) && is_v_passage_cell(*n) &&
-         c.col < grid_settings.widths[c.row] - 1 &&
+  return cell_east(n) && !is_under_cell(n) && is_v_passage_cell(n) &&
+         c->col < grid_settings.widths[c->row] - 1 &&
          n->col < grid_settings.widths[n->row] - 1;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-bool Grid::is_linked(CellCoordinate c1, CellCoordinate c2) const {
-  auto neighbors = get_all_neighbors_(c1);
-  auto n = ranges::find_if(neighbors, [c2](auto n) { return n && *n == c2; });
+bool Grid::is_linked(MaybeCellCoordinate c1, MaybeCellCoordinate c2) const {
+  if (!c2 || !c1) return false;
+  auto neighbors = get_all_neighbors_(*c1);
+  auto n = ranges::find_if(neighbors, [c2](auto n) { return n == c2; });
   if (n == neighbors.end()) {
     // throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1,
     // c2));
     return false;
   }
-  return (grid_view_(c1.row, c1.col).walls &
+  return (grid_view_(c1->row, c1->col).walls &
           (1 << ranges::distance(neighbors.begin(), n))) == 0;
 }
 
@@ -456,8 +454,7 @@ void Grid::link_(CellCoordinate c1, CellCoordinate c2, bool link_or_unlink) {
   auto neighbors = get_all_neighbors_(c1);
   auto n = ranges::find_if(neighbors, [c2](auto n) { return n && *n == c2; });
   if (n == neighbors.end()) {
-    // throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1,
-    // c2));
+    throw std::runtime_error(fmt::format("Bad neighbor: {} -> {}", c1, c2));
   }
   if (link_or_unlink) {
     grid_view_(c1.row, c1.col).walls &=
@@ -468,9 +465,10 @@ void Grid::link_(CellCoordinate c1, CellCoordinate c2, bool link_or_unlink) {
   }
 }
 
-bool Grid::is_under_cell(CellCoordinate c) const {
+bool Grid::is_under_cell(MaybeCellCoordinate c) const {
+  if (!c) return false;
   auto m = as_mdspan();
-  return m(c.row, c.col).check_flag(Cell::Flags::UnderCell);
+  return m(c->row, c->col).check_flag(Cell::Flags::UnderCell);
 }
 
 // Reset grid to all solid walls
@@ -505,16 +503,16 @@ std::vector<CellCoordinate> Grid::get_all_neighbors(CellCoordinate c) const {
               ranges::views::transform([](auto o) { return *o; }) |
               ranges::to<std::vector>;
     if (can_tunnel_north(c)) {
-      rv.push_back(*cell_north(*cell_north(c)));
+      rv.push_back(*cell_north(cell_north(c)));
     }
     if (can_tunnel_south(c)) {
-      rv.push_back(*cell_south(*cell_south(c)));
+      rv.push_back(*cell_south(cell_south(c)));
     }
     if (can_tunnel_east(c)) {
-      rv.push_back(*cell_east(*cell_east(c)));
+      rv.push_back(*cell_east(cell_east(c)));
     }
     if (can_tunnel_west(c)) {
-      rv.push_back(*cell_west(*cell_west(c)));
+      rv.push_back(*cell_west(cell_west(c)));
     }
     return rv;
   }
@@ -559,7 +557,7 @@ std::vector<CellCoordinate> Grid::get_unconnected_neighbors(CellCoordinate c) {
 }
 
 // Helper for getting random neighbor
-std::optional<CellCoordinate> Grid::random_neighbor(CellCoordinate c) {
+MaybeCellCoordinate Grid::random_neighbor(CellCoordinate c) {
   auto n = get_all_neighbors_(c);
   return jt_range_front(n |
                         ranges::views::filter([](auto o) { return bool(o); }) |
@@ -568,7 +566,7 @@ std::optional<CellCoordinate> Grid::random_neighbor(CellCoordinate c) {
 }
 
 // Helper for getting a random neighbor that is closed (no connections)
-std::optional<CellCoordinate> Grid::random_closed_neighbor(CellCoordinate c) {
+MaybeCellCoordinate Grid::random_closed_neighbor(CellCoordinate c) {
   if (grid_settings.enable_weaving) {
     auto neighbors = get_all_neighbors(c);
     return jt_range_front(neighbors | ranges::views::filter([this](auto n) {
@@ -578,7 +576,7 @@ std::optional<CellCoordinate> Grid::random_closed_neighbor(CellCoordinate c) {
   }
   auto neighbors = get_all_neighbors_(c);
   return jt_range_front(neighbors | ranges::views::filter([this](auto n) {
-                          return n && is_closed_cell(*n);
+                          return is_closed_cell(n);
                         }) |
                         ranges::views::transform([](auto o) { return *o; }) |
                         ranges::views::sample(1, gen));

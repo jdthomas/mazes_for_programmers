@@ -40,6 +40,7 @@ auto jt_range_front(R &&rng) {
 struct CellCoordinate {
   int row, col;
 };
+using MaybeCellCoordinate = std::optional<CellCoordinate>;
 
 bool operator<(const CellCoordinate &a, const CellCoordinate &b);
 bool operator==(const CellCoordinate &a, const CellCoordinate &b);
@@ -122,7 +123,7 @@ class Grid {
  private:
   static std::random_device rd;
 
-  using AdjacentCells = std::array<std::optional<CellCoordinate>, 8>;
+  using AdjacentCells = std::array<MaybeCellCoordinate, 8>;
 
   enum class Direction { N, NE, E, SE, S, SW, W, NW };
 
@@ -249,36 +250,38 @@ class Grid {
   }
 
   // Helpers to get neighboring CellCoordinate for each direction
-  std::optional<CellCoordinate> cell_north(CellCoordinate c) const;
-  std::optional<CellCoordinate> cell_east(CellCoordinate c) const;
-  std::optional<CellCoordinate> cell_south(CellCoordinate c) const;
-  std::optional<CellCoordinate> cell_west(CellCoordinate c) const;
+  MaybeCellCoordinate cell_by_direction(MaybeCellCoordinate c,
+                                        Direction d) const {
+    if (!c) return std::nullopt;
+    return get_all_neighbors_(*c)[to_underlying(d)];
+  }
+  MaybeCellCoordinate cell_north(MaybeCellCoordinate c) const;
+  MaybeCellCoordinate cell_east(MaybeCellCoordinate c) const;
+  MaybeCellCoordinate cell_south(MaybeCellCoordinate c) const;
+  MaybeCellCoordinate cell_west(MaybeCellCoordinate c) const;
 
-  std::optional<CellCoordinate> cell_north_west(CellCoordinate c) const;
-  std::optional<CellCoordinate> cell_north_east(CellCoordinate c) const;
-  std::optional<CellCoordinate> cell_south_west(CellCoordinate c) const;
-  std::optional<CellCoordinate> cell_south_east(CellCoordinate c) const;
+  MaybeCellCoordinate cell_north_west(MaybeCellCoordinate c) const;
+  MaybeCellCoordinate cell_north_east(MaybeCellCoordinate c) const;
+  MaybeCellCoordinate cell_south_west(MaybeCellCoordinate c) const;
+  MaybeCellCoordinate cell_south_east(MaybeCellCoordinate c) const;
 
-  bool is_crossing_undercell(CellCoordinate over, CellCoordinate under) const;
+  bool is_crossing_undercell(MaybeCellCoordinate over,
+                             MaybeCellCoordinate under) const;
 
-  bool is_connected_directly_north(CellCoordinate c) const;
-  bool is_connected_directly_west(CellCoordinate c) const;
-  bool is_connected_directly_south(CellCoordinate c) const;
-  bool is_connected_directly_east(CellCoordinate c) const;
+  bool is_connected_directly_north(MaybeCellCoordinate c) const;
+  bool is_connected_directly_west(MaybeCellCoordinate c) const;
+  bool is_connected_directly_south(MaybeCellCoordinate c) const;
+  bool is_connected_directly_east(MaybeCellCoordinate c) const;
   //
-  std::optional<CellCoordinate> connected_cell_north(CellCoordinate c) const;
-  std::optional<CellCoordinate> connected_cell_east(CellCoordinate c) const;
-  std::optional<CellCoordinate> connected_cell_south(CellCoordinate c) const;
-  std::optional<CellCoordinate> connected_cell_west(CellCoordinate c) const;
+  MaybeCellCoordinate connected_cell_north(MaybeCellCoordinate c) const;
+  MaybeCellCoordinate connected_cell_east(MaybeCellCoordinate c) const;
+  MaybeCellCoordinate connected_cell_south(MaybeCellCoordinate c) const;
+  MaybeCellCoordinate connected_cell_west(MaybeCellCoordinate c) const;
 
-  std::optional<CellCoordinate> connected_cell_north_west(
-      CellCoordinate c) const;
-  std::optional<CellCoordinate> connected_cell_south_west(
-      CellCoordinate c) const;
-  std::optional<CellCoordinate> connected_cell_north_east(
-      CellCoordinate c) const;
-  std::optional<CellCoordinate> connected_cell_south_east(
-      CellCoordinate c) const;
+  MaybeCellCoordinate connected_cell_north_west(MaybeCellCoordinate c) const;
+  MaybeCellCoordinate connected_cell_south_west(MaybeCellCoordinate c) const;
+  MaybeCellCoordinate connected_cell_north_east(MaybeCellCoordinate c) const;
+  MaybeCellCoordinate connected_cell_south_east(MaybeCellCoordinate c) const;
 
   // Helpers for getting all neighbors
   AdjacentCells get_all_neighbors_(CellCoordinate c) const;
@@ -289,34 +292,34 @@ class Grid {
   // Helpers for getting all connected neighbors
   AdjacentCells get_connected_neighbors_(CellCoordinate c) const;
 
-  size_t count_connected_neighbors(const CellCoordinate c) const;
+  size_t count_connected_neighbors(const MaybeCellCoordinate c) const;
 
   // Helper to check if a cell has no connections
-  bool is_closed_cell(CellCoordinate c) const;
+  bool is_closed_cell(MaybeCellCoordinate c) const;
 
   // Helper to check if a cell is a dead end (has only one connecttion)
-  bool is_dead_end_cell(CellCoordinate c) const;
+  bool is_dead_end_cell(MaybeCellCoordinate c) const;
 
-  bool is_h_passage_cell(CellCoordinate c) const;
-  bool is_v_passage_cell(CellCoordinate c) const;
+  bool is_h_passage_cell(MaybeCellCoordinate c) const;
+  bool is_v_passage_cell(MaybeCellCoordinate c) const;
 
-  bool can_tunnel_north(CellCoordinate c) const;
-  bool can_tunnel_south(CellCoordinate c) const;
-  bool can_tunnel_west(CellCoordinate c) const;
-  bool can_tunnel_east(CellCoordinate c) const;
+  bool can_tunnel_north(MaybeCellCoordinate c) const;
+  bool can_tunnel_south(MaybeCellCoordinate c) const;
+  bool can_tunnel_west(MaybeCellCoordinate c) const;
+  bool can_tunnel_east(MaybeCellCoordinate c) const;
 
   ////////////////////////////////////////////////////////////////////////////////
 
   auto as_mdspan() const { return grid_view_; }
 
-  bool is_linked(CellCoordinate c1, CellCoordinate c2) const;
+  bool is_linked(MaybeCellCoordinate c1, MaybeCellCoordinate c2) const;
 
   void unlink(CellCoordinate c1, CellCoordinate c2);
   // Helper for linking two cells togetherr (must be neighbors)
   void link(CellCoordinate c1, CellCoordinate c2);
   void link_(CellCoordinate c1, CellCoordinate c2, bool link_or_unlink);
 
-  bool is_under_cell(CellCoordinate c) const;
+  bool is_under_cell(MaybeCellCoordinate c) const;
 
   auto &operator()(CellCoordinate cell) const {
     const auto &[row, col] = cell;
@@ -342,10 +345,10 @@ class Grid {
   std::vector<CellCoordinate> get_unconnected_neighbors(CellCoordinate c);
 
   // Helper for getting random neighbor
-  std::optional<CellCoordinate> random_neighbor(CellCoordinate c);
+  MaybeCellCoordinate random_neighbor(CellCoordinate c);
 
   // Helper for getting a random neighbor that is closed (no connections)
-  std::optional<CellCoordinate> random_closed_neighbor(CellCoordinate c);
+  MaybeCellCoordinate random_closed_neighbor(CellCoordinate c);
 };
 
 std::vector<int> dijkstra_distances(const Grid &grid,
