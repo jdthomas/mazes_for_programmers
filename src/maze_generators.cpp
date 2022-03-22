@@ -26,6 +26,7 @@ namespace pstl = std;
 #include <vector>
 
 #include "maze.h"
+#include "maze_generators.h"
 
 namespace jt::maze {
 void ensure_registry() {}

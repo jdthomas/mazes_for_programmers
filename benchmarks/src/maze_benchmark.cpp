@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "maze.h"
+#include "maze_generators.h"
 
 namespace {};  // namespace
 

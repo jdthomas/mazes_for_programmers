@@ -33,7 +33,7 @@ find_path(PNGPP_INCLUDE_DIRS "png++/color.hpp")
 
 
 
-add_library(mazes src/maze.cpp src/maze_generators.cpp src/maze.h)
+add_library(mazes src/maze.cpp src/maze_generators.cpp src/maze.h src/maze_generators.h)
 target_link_libraries(mazes PUBLIC fmt::fmt std::mdspan TBB::tbb ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(mazes PUBLIC cxx_std_17)
 

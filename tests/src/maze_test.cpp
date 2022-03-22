@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "maze.h"
+#include "maze_generators.h"
 
 namespace {
 bool is_perfect_maze(jt::maze::Grid &grid) {
