@@ -76,8 +76,8 @@ class Grid {
 
   Grid(int width, int height)
       : Grid(GridSettings{
-            .width = width,
             .height = height,
+            .width = width,
             .mask = GridMask{.mask = std::vector<uint8_t>(width * height)},
         }){};
 

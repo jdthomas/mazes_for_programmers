@@ -8,9 +8,13 @@
     "gtest",
     {
       "name": "imgui",
-      "features": ["freetype", "osx-binding", "opengl3-binding"]
+      "features": ["freetype", "osx-binding", "opengl3-binding"],
+      "platform": "osx"
     },
-    "imgui-sfml",
+    {
+      "name": "imgui-sfml",
+      "platform": "osx"
+    },
     "libpng",
     "mdspan",
     "parallelstl",
